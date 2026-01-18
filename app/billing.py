@@ -340,11 +340,22 @@ def register_billing_routes(app):
     @app.post("/api/keys", response_model=CreateKeyResponse)
     async def create_key(request: CreateKeyRequest):
         """Create a new API key"""
-        api_key = create_api_key(request.email, request.tier)
-        
         # Create Stripe customer if billing enabled
+        customer_id = None
         if STRIPE_SECRET_KEY:
-            customer_id = await create_stripe_customer(request.email)
+            try:
+                customer_id = await create_stripe_customer(request.email)
+            except stripe.error.StripeError as e:
+                logging.error(f"Stripe error: {e}")
+                # For free tier, we might allow creation without Stripe?
+                # But let's fail safe for now
+                raise HTTPException(
+                    status_code=503, 
+                    detail="Billing service unavailable. Please try again later."
+                )
+        
+        api_key = create_api_key(request.email, request.tier)
+        if customer_id:
             api_key.stripe_customer_id = customer_id
         
         tier_info = TIERS[api_key.tier]

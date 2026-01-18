@@ -25,6 +25,10 @@ RUN pip install --upgrade pip && \
 
 # Copy application
 COPY app/ ./app/
+COPY scripts/ ./scripts/
+
+# Generate demo weights (since they are excluded from git)
+RUN python scripts/generate_demo_weights.py
 
 # Create non-root user
 RUN useradd --create-home appuser && chown -R appuser /app

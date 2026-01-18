@@ -259,20 +259,32 @@ Add `nginx.conf` and enable the nginx service in `docker-compose.yml`.
 
 ---
 
-## 📈 Roadmap
+## 📈 Roadmap (Active)
 
 - [x] Core FNO inference
-- [x] REST API
-- [x] Interactive demo
-- [x] Docker containerization
-- [ ] Pre-trained weights (15TB The Well data)
+- [x] REST API with batch support
+- [x] Interactive demo page
+- [x] Docker/Railway containerization
+- [x] Rate limiting & token bucket auth
+- [x] Stripe billing integration (Pro tier)
+- [x] Prometheus metrics & observability
+- [ ] Train on full 15TB "The Well" data
 - [ ] 3D FNO extension
 - [ ] Custom geometry upload
-- [ ] Rate limiting & auth
-- [ ] Redis caching
-- [ ] Prometheus metrics
 
----
+## 🚢 Deployment
+
+Code is push-ready for Railway, Render, or Fly.io.
+See [Deployment Guide](docs/DEPLOYMENT.md) for step-by-step instructions.
+
+## 💰 Billing
+
+Includes complete Stripe integration for:
+- Free tier (limited API keys)
+- Pro tier ($199/mo subscription)
+- Metered usage ($0.25/prediction)
+
+See [Stripe Setup](docs/STRIPE_SETUP.md) for configuration.
 
 ## 📄 License
 
