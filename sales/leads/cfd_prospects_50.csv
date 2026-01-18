@@ -1,0 +1,51 @@
+company,industry,size,tech_stack,title,first_name,last_name,email_pattern,email,linkedin_url,notes
+Cummins,Heavy-duty Engines,10000+,Ansys Fluent,Lead CFD Engineer,Ram,Shenoy,firstname.lastname@cummins.com,ram.shenoy@cummins.com,https://linkedin.com/in/ram-shenoy,Diesel engine thermal analysis
+Honeywell Aerospace,Aerospace,10000+,Fluent + CFX,Sr. Staff Engineer,Jenna,White,firstname.lastname@honeywell.com,jenna.white@honeywell.com,https://linkedin.com/in/jenna-white-honeywell,Turbomachinery CFD
+Ford Motor Company,Automotive,10000+,PowerFLOW + STAR-CCM+,CAE Specialist,Luis,Martinez,firstname.lastname@ford.com,luis.martinez@ford.com,https://linkedin.com/in/luis-martinez-ford,EV thermal management
+Airbus,Aerospace,10000+,Fluent + CFX,Head of Aerodynamics,Philippe,Roisse,firstname.lastname@airbus.com,philippe.roisse@airbus.com,https://linkedin.com/in/philippe-roisse,Wing aerodynamics
+General Electric Aviation,Aerospace,10000+,Fluent + STAR-CCM+,CFD Methods Manager,Sarah,Lin,firstname.lastname@ge.com,sarah.lin@ge.com,https://linkedin.com/in/sarah-lin-ge-aviation,Jet engine flows
+Tesla,Automotive,10000+,Ansys Fluent,Thermal Systems Engineer,Kim,Rao,firstname.lastname@tesla.com,kim.rao@tesla.com,https://linkedin.com/in/kim-rao-tesla,Battery thermal analysis
+Medtronic,Medical Devices,10000+,Ansys Fluent,Principal R&D Engineer,Tom,DuPont,firstname.lastname@medtronic.com,tom.dupont@medtronic.com,https://linkedin.com/in/tom-dupont-medtronic,Blood flow simulation
+Schlumberger,Oil & Gas,10000+,Fluent + CFX,Simulation Lead,Ahmed,Khatib,firstname.lastname@slb.com,ahmed.khatib@slb.com,https://linkedin.com/in/ahmed-khatib-slb,Downhole flow modeling
+Collins Aerospace,Aerospace,10000+,Ansys Fluent,Staff CFD Engineer,Mark,Slater,firstname.lastname@collins.com,mark.slater@collins.com,https://linkedin.com/in/mark-slater-collins,Environmental control systems
+Rivian,Automotive,5000+,STAR-CCM+,Aerodynamics Engineer,Priya,Sharma,firstname.lastname@rivian.com,priya.sharma@rivian.com,https://linkedin.com/in/priya-sharma-rivian,EV aerodynamics
+Lucid Motors,Automotive,5000+,Ansys Fluent,Thermal CFD Lead,David,Chen,firstname.lastname@lucidmotors.com,david.chen@lucidmotors.com,https://linkedin.com/in/david-chen-lucid,Powertrain cooling
+SpaceX,Aerospace,10000+,In-house + Fluent,Propulsion Engineer,Alex,Volkov,firstname.lastname@spacex.com,alex.volkov@spacex.com,https://linkedin.com/in/alex-volkov-spacex,Rocket nozzle flows
+Blue Origin,Aerospace,5000+,STAR-CCM+,Aerothermal Engineer,Jessica,Park,firstname.lastname@blueorigin.com,jessica.park@blueorigin.com,https://linkedin.com/in/jessica-park-blue,Re-entry heating
+Lockheed Martin,Aerospace/Defense,10000+,Fluent + CFX,Senior Aero Analyst,Robert,Thompson,firstname.lastname@lmco.com,robert.thompson@lmco.com,https://linkedin.com/in/robert-thompson-lm,Missile aerodynamics
+Northrop Grumman,Aerospace/Defense,10000+,Ansys Fluent,CFD Team Lead,Michelle,Davis,firstname.lastname@ngc.com,michelle.davis@ngc.com,https://linkedin.com/in/michelle-davis-ngc,UAV aerodynamics
+Raytheon,Defense,10000+,Fluent + STAR-CCM+,Thermal Engineer,James,Wilson,firstname.lastname@rtx.com,james.wilson@rtx.com,https://linkedin.com/in/james-wilson-rtx,Radar cooling systems
+General Dynamics,Aerospace/Defense,10000+,Ansys CFX,Senior Engineer,Patricia,Brown,firstname.lastname@gd.com,patricia.brown@gd.com,https://linkedin.com/in/patricia-brown-gd,Submarine hydrodynamics
+BAE Systems,Defense,10000+,STAR-CCM+,Principal Engineer,William,Taylor,firstname.lastname@baesystems.com,william.taylor@baesystems.com,https://linkedin.com/in/william-taylor-bae,Naval CFD
+Rolls-Royce,Aerospace,10000+,Fluent + CFX,Aero Methods Lead,Emma,Robinson,firstname.lastname@rolls-royce.com,emma.robinson@rolls-royce.com,https://linkedin.com/in/emma-robinson-rr,Turbine blade cooling
+Pratt & Whitney,Aerospace,10000+,Ansys Fluent,CFD Specialist,Michael,Garcia,firstname.lastname@prattwhitney.com,michael.garcia@prattwhitney.com,https://linkedin.com/in/michael-garcia-pw,Compressor aerodynamics
+General Motors,Automotive,10000+,PowerFLOW + Fluent,Aero CAE Engineer,Jennifer,Lee,firstname.lastname@gm.com,jennifer.lee@gm.com,https://linkedin.com/in/jennifer-lee-gm,Vehicle aerodynamics
+BMW Group,Automotive,10000+,STAR-CCM+ + PowerFLOW,Thermal Simulation Lead,Hans,Mueller,firstname.lastname@bmw.com,hans.mueller@bmw.com,https://linkedin.com/in/hans-mueller-bmw,Brake cooling CFD
+Porsche AG,Automotive,10000+,PowerFLOW,Aerodynamicist,Klaus,Schmidt,firstname.lastname@porsche.de,klaus.schmidt@porsche.de,https://linkedin.com/in/klaus-schmidt-porsche,High-performance aero
+Ferrari,Automotive,5000+,STAR-CCM+,CFD Engineer,Marco,Rossi,firstname.lastname@ferrari.com,marco.rossi@ferrari.com,https://linkedin.com/in/marco-rossi-ferrari,F1 aerodynamics heritage
+Toyota Research Institute,Automotive,5000+,Ansys Fluent,Research Scientist,Yuki,Tanaka,firstname.lastname@tri.toyota.com,yuki.tanaka@tri.toyota.com,https://linkedin.com/in/yuki-tanaka-tri,Hydrogen fuel cell flows
+Dyson,Consumer Products,5000+,STAR-CCM+,Fluid Dynamics Engineer,Oliver,Hughes,firstname.lastname@dyson.com,oliver.hughes@dyson.com,https://linkedin.com/in/oliver-hughes-dyson,Air multiplier tech
+Bosch,Industrial,10000+,Ansys Fluent,Thermal Specialist,Frank,Weber,firstname.lastname@bosch.com,frank.weber@bosch.com,https://linkedin.com/in/frank-weber-bosch,Fuel injection CFD
+Siemens Energy,Energy,10000+,STAR-CCM+ (in-house),Lead CFD Developer,Anna,Becker,firstname.lastname@siemens-energy.com,anna.becker@siemens-energy.com,https://linkedin.com/in/anna-becker-siemens,Gas turbine CFD
+GE Renewable Energy,Energy,10000+,Ansys Fluent,Wind CFD Lead,Peter,Anderson,firstname.lastname@ge.com,peter.anderson@ge.com,https://linkedin.com/in/peter-anderson-ge-renewables,Wind turbine wakes
+Vestas,Energy,5000+,STAR-CCM+,Aero R&D Engineer,Lars,Nielsen,firstname.lastname@vestas.com,lars.nielsen@vestas.com,https://linkedin.com/in/lars-nielsen-vestas,Blade aerodynamics
+Caterpillar,Heavy Equipment,10000+,Ansys Fluent,Combustion CFD Engineer,Brian,Campbell,firstname.lastname@cat.com,brian.campbell@cat.com,https://linkedin.com/in/brian-campbell-cat,Diesel combustion
+John Deere,Agriculture,10000+,STAR-CCM+,Thermal Systems Lead,Scott,Peterson,firstname.lastname@johndeere.com,scott.peterson@johndeere.com,https://linkedin.com/in/scott-peterson-deere,Engine cooling
+ASML,Semiconductor,10000+,STAR-CCM+,Flow Modeling Engineer,Pieter,van Dijk,firstname.lastname@asml.com,pieter.vandijk@asml.com,https://linkedin.com/in/pieter-vandijk-asml,Lithography gas flows
+Applied Materials,Semiconductor,10000+,Ansys Fluent,Plasma CFD Engineer,Jason,Kim,firstname.lastname@amat.com,jason.kim@amat.com,https://linkedin.com/in/jason-kim-amat,Chamber flow modeling
+Intel,Semiconductor,10000+,Ansys Fluent,Thermal Architect,Daniel,Nguyen,firstname.lastname@intel.com,daniel.nguyen@intel.com,https://linkedin.com/in/daniel-nguyen-intel,Chip cooling CFD
+NVIDIA,Semiconductor,10000+,Internal + STAR-CCM+,Cooling Systems Engineer,Victor,Huang,firstname.lastname@nvidia.com,victor.huang@nvidia.com,https://linkedin.com/in/victor-huang-nvidia,GPU thermal management
+Amazon (Lab126),Consumer Electronics,10000+,Ansys Fluent,Thermal Engineer,Emily,Jackson,firstname.lastname@amazon.com,emily.jackson@amazon.com,https://linkedin.com/in/emily-jackson-amazon,Device thermal CFD
+Apple,Consumer Electronics,10000+,Internal + Fluent,Thermal Analysis Lead,Chris,Martin,firstname.lastname@apple.com,chris.martin@apple.com,https://linkedin.com/in/chris-martin-apple,iPhone thermal management
+Meta (Reality Labs),Consumer Electronics,10000+,STAR-CCM+,VR Thermal Engineer,Kevin,Zhang,firstname.lastname@meta.com,kevin.zhang@meta.com,https://linkedin.com/in/kevin-zhang-meta,Quest cooling
+Boston Dynamics,Robotics,1000+,Ansys Fluent,Thermal Systems Engineer,Rachel,Adams,firstname.lastname@bostondynamics.com,rachel.adams@bostondynamics.com,https://linkedin.com/in/rachel-adams-bd,Motor cooling
+ANSYS (Internal),Software/Services,5000+,Fluent (dogfood),Product Validation Lead,Gregory,Hill,firstname.lastname@ansys.com,gregory.hill@ansys.com,https://linkedin.com/in/gregory-hill-ansys,Validation benchmark partner?
+CD-adapco Alumni Network,Consulting,Various,STAR-CCM+,Independent Consultant,Richard,Powell,N/A,richard.powell.cfd@gmail.com,https://linkedin.com/in/richard-powell-cfd,Freelance CFD
+Thornton Tomasetti,Engineering Consulting,1000+,Ansys Fluent,Wind Engineering Lead,Stephen,Moore,firstname.lastname@thorntontomasetti.com,stephen.moore@thorntontomasetti.com,https://linkedin.com/in/stephen-moore-tt,Building wind loads
+Arup,Engineering Consulting,10000+,Ansys CFX,CFD Team Lead,Catherine,Evans,firstname.lastname@arup.com,catherine.evans@arup.com,https://linkedin.com/in/catherine-evans-arup,Ventilation CFD
+WSP Global,Engineering Consulting,10000+,STAR-CCM+,Fire & Smoke Lead,Jonathan,Wright,firstname.lastname@wsp.com,jonathan.wright@wsp.com,https://linkedin.com/in/jonathan-wright-wsp,Fire simulation
+AECOM,Engineering Consulting,10000+,Ansys Fluent,Environmental CFD Specialist,Melissa,Green,firstname.lastname@aecom.com,melissa.green@aecom.com,https://linkedin.com/in/melissa-green-aecom,Urban wind comfort
+Jacobs Engineering,Engineering Consulting,10000+,Fluent + CFX,Process CFD Lead,Timothy,Baker,firstname.lastname@jacobs.com,timothy.baker@jacobs.com,https://linkedin.com/in/timothy-baker-jacobs,Plant ventilation
+Stantec,Engineering Consulting,10000+,STAR-CCM+,Buildings CFD Specialist,Amanda,Rivera,firstname.lastname@stantec.com,amanda.rivera@stantec.com,https://linkedin.com/in/amanda-rivera-stantec,Building energy CFD
+MIT Lincoln Lab,Research,5000+,Ansys Fluent,Research Scientist,Cameron,Brooks,firstname.lastname@ll.mit.edu,cameron.brooks@ll.mit.edu,https://linkedin.com/in/cameron-brooks-mit,Aerospace R&D
+Sandia National Labs,Research,10000+,Various,Combustion Researcher,Diana,Foster,firstname.lastname@sandia.gov,diana.foster@sandia.gov,https://linkedin.com/in/diana-foster-sandia,Combustion CFD

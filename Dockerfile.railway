@@ -1,0 +1,41 @@
+# Railway-optimized Dockerfile
+# Optimized for fast cold starts and GPU inference
+
+FROM python:3.11-slim
+
+# Set environment
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    SURRAPI_PORT=8000 \
+    SURRAPI_DEVICE=auto \
+    SURRAPI_LOG_LEVEL=INFO
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# Copy application
+COPY app/ ./app/
+
+# Create non-root user
+RUN useradd --create-home appuser && chown -R appuser /app
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Expose port (Railway uses PORT env var)
+EXPOSE 8000
+
+# Start server
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}

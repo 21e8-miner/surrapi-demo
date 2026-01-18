@@ -1,0 +1,56 @@
+# FNO Large Configuration  
+# For production training on full The Well dataset (15TB)
+# Requires 8x A100 80GB or similar
+
+model:
+  modes: 64
+  width: 128
+  in_channels: 3
+  out_channels: 3
+  num_layers: 6
+  padding: 16
+
+training:
+  batch_size: 64
+  epochs: 200
+  learning_rate: 0.0005
+  weight_decay: 0.0001
+  lr_scheduler: cosine
+  warmup_epochs: 10
+  gradient_clip: 1.0
+  mixed_precision: true
+  compile_model: true
+  gradient_accumulation_steps: 4
+
+data:
+  dataset_name: navier_stokes_2d
+  resolution: 128
+  train_split: 0.9
+  val_split: 0.05
+  test_split: 0.05
+  num_workers: 16
+  prefetch_factor: 4
+  # Enable streaming for large datasets
+  streaming: true
+  max_samples_per_epoch: 1000000
+
+loss:
+  type: relative_l2
+  divergence_weight: 0.1
+  boundary_weight: 0.05
+  conservation_weight: 0.01
+
+checkpointing:
+  save_every: 10
+  keep_last: 5
+  output_dir: checkpoints/large
+
+logging:
+  log_every: 50
+  wandb_project: surrapi-training
+  wandb_entity: surrapi
+  
+distributed:
+  enabled: true
+  backend: nccl
+  find_unused_parameters: false

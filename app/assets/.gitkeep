@@ -1,0 +1,4 @@
+# This file ensures the assets directory exists in Git
+# Model weights (*.pt) are excluded via .gitignore
+# Download pre-trained weights or generate demo weights:
+#   python scripts/generate_demo_weights.py

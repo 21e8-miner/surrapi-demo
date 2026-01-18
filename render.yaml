@@ -1,0 +1,43 @@
+# Render Blueprint
+# Deploy to Render.com with this file
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: surrapi
+    runtime: docker
+    dockerfilePath: ./Dockerfile.railway
+    plan: standard  # Use 'pro' for GPU instances
+    region: oregon
+    healthCheckPath: /health
+    
+    envVars:
+      - key: SURRAPI_PORT
+        value: 8000
+      - key: SURRAPI_DEVICE
+        value: auto
+      - key: SURRAPI_LOG_LEVEL
+        value: INFO
+      - key: SURRAPI_CHECKPOINT
+        value: app/assets/fno_128.pt
+    
+    # Scaling
+    numInstances: 1
+    
+    # Autoscaling (Pro plan only)
+    autoscaling:
+      minInstances: 1
+      maxInstances: 10
+      criteria:
+        cpu:
+          enabled: true
+          percentage: 70
+        memory:
+          enabled: true
+          percentage: 80
+
+# Optional: Redis for caching
+#  - type: redis
+#    name: surrapi-cache
+#    plan: free
+#    maxmemoryPolicy: allkeys-lru

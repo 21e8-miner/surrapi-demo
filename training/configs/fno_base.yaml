@@ -1,0 +1,45 @@
+# FNO Base Configuration
+# For 2D Navier-Stokes surrogate training
+
+model:
+  modes: 32
+  width: 64
+  in_channels: 3
+  out_channels: 3
+  num_layers: 4
+  padding: 8
+
+training:
+  batch_size: 32
+  epochs: 100
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  lr_scheduler: cosine
+  warmup_epochs: 5
+  gradient_clip: 1.0
+  mixed_precision: true
+  compile_model: true
+
+data:
+  dataset_name: navier_stokes_2d
+  resolution: 128
+  train_split: 0.8
+  val_split: 0.1
+  test_split: 0.1
+  num_workers: 8
+  prefetch_factor: 2
+
+loss:
+  type: relative_l2
+  divergence_weight: 0.1
+  boundary_weight: 0.05
+
+checkpointing:
+  save_every: 5
+  keep_last: 3
+  output_dir: checkpoints
+
+logging:
+  log_every: 100
+  wandb_project: surrapi-training
+  wandb_entity: null

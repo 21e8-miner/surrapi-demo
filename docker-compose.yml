@@ -1,0 +1,85 @@
+# =============================================================================
+# SurrAPI Docker Compose
+# Full stack deployment with GPU support
+# =============================================================================
+
+version: "3.9"
+
+services:
+  # ---------------------------------------------------------------------------
+  # SurrAPI - Main API Service
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: surrapi-api
+    ports:
+      - "8000:8000"
+    environment:
+      - SURRAPI_PORT=8000
+      - SURRAPI_DEVICE=auto
+      - SURRAPI_LOG_LEVEL=INFO
+      - SURRAPI_CHECKPOINT=/surrapi/app/assets/fno_128.pt
+    volumes:
+      # Mount weights directory (allows swapping models without rebuild)
+      - ./app/assets:/surrapi/app/assets:ro
+      # Optional: mount for development hot-reload
+      # - ./app:/surrapi/app
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # GPU support (uncomment for CUDA)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+    networks:
+      - surrapi-net
+  # ---------------------------------------------------------------------------
+  # Redis - Caching layer (optional, for production)
+  # ---------------------------------------------------------------------------
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: surrapi-redis
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis-data:/data
+  #   restart: unless-stopped
+  #   networks:
+  #     - surrapi-net
+
+  # ---------------------------------------------------------------------------
+  # Nginx - Reverse proxy (optional, for production SSL)
+  # ---------------------------------------------------------------------------
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: surrapi-nginx
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./certs:/etc/nginx/certs:ro
+  #   depends_on:
+  #     - api
+  #   restart: unless-stopped
+  #   networks:
+  #     - surrapi-net
+
+networks:
+  surrapi-net:
+    driver: bridge
+
+# volumes:
+#   redis-data:
