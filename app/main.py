@@ -131,15 +131,29 @@ def build_vti_base64(ux: np.ndarray, uy: np.ndarray, p: np.ndarray, resolution: 
 
 
 def compute_derived_quantities(ux: np.ndarray, uy: np.ndarray, p: np.ndarray) -> dict:
-    """Compute velocity magnitude, vorticity, and integral quantities"""
+    """
+    Compute velocity magnitude, vorticity, and integral quantities.
+    Validates against 'First Principles' (Mass Conservation).
+    """
+    
+    # Grid spacing (assumed normalized 0-1)
+    height, width = ux.shape
+    dx = 1.0 / (width - 1)
+    dy = 1.0 / (height - 1)
     
     # Velocity magnitude
     vel_mag = np.sqrt(ux**2 + uy**2)
     
     # Vorticity: ω = ∂uy/∂x - ∂ux/∂y
-    duy_dx = np.gradient(uy, axis=1)
-    dux_dy = np.gradient(ux, axis=0)
+    duy_dx = np.gradient(uy, axis=1) / dx
+    dux_dy = np.gradient(ux, axis=0) / dy
     vorticity = duy_dx - dux_dy
+    
+    # Mass Conservation Check: ∇·u = ∂ux/∂x + ∂uy/∂y
+    dux_dx = np.gradient(ux, axis=1) / dx
+    duy_dy = np.gradient(uy, axis=0) / dy
+    divergence = dux_dx + duy_dy
+    div_l2 = np.sqrt(np.mean(divergence**2))
     
     # Integral quantities
     enstrophy = np.mean(vorticity**2)
@@ -147,12 +161,15 @@ def compute_derived_quantities(ux: np.ndarray, uy: np.ndarray, p: np.ndarray) ->
     pressure_drop = np.mean(p[:, 0]) - np.mean(p[:, -1])
     
     # Simplified drag/lift (assuming unit domain, would need geometry for real calc)
+    # References: Cd = 2D / (rho * v^2 * L)
     drag_coeff = 2 * pressure_drop / (np.mean(vel_mag)**2 + 1e-8)
     lift_coeff = np.mean(np.gradient(p, axis=0)) / (np.mean(vel_mag)**2 + 1e-8)
     
     return {
         "velocity_magnitude": vel_mag.flatten().tolist(),
         "vorticity": vorticity.flatten().tolist(),
+        "divergence": divergence.flatten().tolist(),
+        "physics_score": 1.0 / (1.0 + div_l2),  # 1.0 is perfect mass conservation
         "enstrophy": float(enstrophy),
         "max_velocity": float(max_velocity),
         "pressure_drop": float(pressure_drop),
@@ -334,10 +351,14 @@ async def predict(request: PredictRequest):
         # Channel 2: Mach number (normalized)
         bc[0, 2, :, :] = request.mach / 0.6
         
-        # Add inlet profile (parabolic for Poiseuille-like flow)
-        y = torch.linspace(-1, 1, resolution)
-        inlet_profile = 1 - y**2  # Parabolic profile, shape [resolution]
-        bc[0, 0, :, 0] = bc[0, 0, :, 0] + 0.5 * inlet_profile  # Add to left boundary
+        # First Principles: Apply Dirichlet boundary if inlet velocity provided
+        if request.inlet_velocity:
+            # We assume Ch0 is velocity-related for 'The Well' FNO baselines
+            y = torch.linspace(-1, 1, resolution)
+            parabola = 1 - y**2
+            # Superimpose inlet profile on top of the base Reynolds scaling
+            # This represents a spatially varying BC within the parameter field
+            bc[0, 0, :, 0] = (request.inlet_velocity / 10.0) * parabola
         
         # Move to device
         x = bc.to(state.device)
@@ -382,6 +403,8 @@ async def predict(request: PredictRequest):
             p=p.flatten().tolist(),
             velocity_magnitude=derived["velocity_magnitude"],
             vorticity=derived["vorticity"],
+            divergence=derived["divergence"],
+            physics_score=derived["physics_score"],
             resolution=resolution,
             inference_time_ms=inference_ms
         )

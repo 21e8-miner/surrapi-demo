@@ -292,6 +292,7 @@
             width: 100%;
             height: 8px;
             -webkit-appearance: none;
+            appearance: none;
             background: var(--dark-2);
             border-radius: 4px;
             outline: none;
@@ -386,6 +387,17 @@
             border-radius: 20px;
             color: var(--success);
             font-size: 0.85rem;
+        }
+
+        .physics-score {
+            font-family: 'JetBrains Mono', monospace;
+            padding: 0.3rem 0.8rem;
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 20px;
+            color: var(--primary);
+            font-size: 0.85rem;
+            margin-left: 0.5rem;
         }
 
         #flowPlot {
@@ -906,7 +918,10 @@
             <div class="demo-output">
                 <div class="output-header">
                     <span class="output-title">Flow Visualization</span>
-                    <span class="inference-time" id="inferenceTime">Ready</span>
+                    <div style="display: flex; align-items: center;">
+                        <span class="inference-time" id="inferenceTime">Ready</span>
+                        <span class="physics-score" id="physicsScore" style="display: none;">Physics: 100%</span>
+                    </div>
                 </div>
                 <div id="flowPlot"></div>
                 <div class="field-selector">
@@ -914,6 +929,7 @@
                     <button class="field-btn" onclick="showField('uy')" id="btn-uy">Velocity Y</button>
                     <button class="field-btn" onclick="showField('p')" id="btn-p">Pressure</button>
                     <button class="field-btn" onclick="showField('vorticity')" id="btn-vorticity">Vorticity</button>
+                    <button class="field-btn" onclick="showField('divergence')" id="btn-divergence">Divergence</button>
                     <button class="field-btn" onclick="showField('velocity_magnitude')"
                         id="btn-velocity_magnitude">Speed</button>
                 </div>
@@ -1194,6 +1210,19 @@ pressure = np.<span class="function">array</span>(data[<span class="string">"p"<
                     `${elapsed.toFixed(0)}ms (server: ${currentData.inference_time_ms.toFixed(0)}ms)`;
                 document.getElementById('inferenceTime').style.borderColor = 'rgba(34, 197, 94, 0.5)';
 
+                // Update physics score
+                if (currentData.physics_score) {
+                    const score = (currentData.physics_score * 100).toFixed(1);
+                    const scoreEl = document.getElementById('physicsScore');
+                    scoreEl.textContent = `Physics: ${score}%`;
+                    scoreEl.style.display = 'inline-block';
+
+                    // Color based on score
+                    if (score > 95) scoreEl.style.color = '#22c55e';
+                    else if (score > 80) scoreEl.style.color = '#f59e0b';
+                    else scoreEl.style.color = '#ef4444';
+                }
+
                 showField(currentField);
 
             } catch (error) {
@@ -1235,6 +1264,9 @@ pressure = np.<span class="function">array</span>(data[<span class="string">"p"<
             } else if (field === 'vorticity') {
                 colorscale = 'RdBu';
                 title = 'Vorticity (ω)';
+            } else if (field === 'divergence') {
+                colorscale = 'Picnic';
+                title = 'Divergence ∇·u (Ideal=0)';
             } else if (field === 'velocity_magnitude') {
                 colorscale = 'Portland';
                 title = 'Speed |u|';
@@ -1244,11 +1276,18 @@ pressure = np.<span class="function">array</span>(data[<span class="string">"p"<
                 title = 'Velocity Y (u_y)';
             }
 
-            Plotly.update('flowPlot', {
+            let update = {
                 z: [z],
                 colorscale: colorscale,
                 colorbar: { title: title }
-            });
+            };
+
+            // Center divergence/vorticity at zero for physical accuracy
+            if (field === 'divergence' || field === 'vorticity') {
+                update.zmid = 0;
+            }
+
+            Plotly.update('flowPlot', update);
         }
 
         // Initialize on load

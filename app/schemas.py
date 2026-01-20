@@ -165,6 +165,16 @@ class PredictResponse(BaseModel):
         description="Z-component of vorticity ω = ∂uy/∂x - ∂ux/∂y."
     )
     
+    divergence: Optional[List[float]] = Field(
+        default=None,
+        description="Mass conservation error ∇·u. Should be close to 0."
+    )
+    
+    physics_score: Optional[float] = Field(
+        default=None,
+        description="Confidence score based on mass conservation (0.0 to 1.0)."
+    )
+    
     # Metadata
     resolution: int = Field(
         default=128,
@@ -242,6 +252,16 @@ class HealthResponse(BaseModel):
     model_loaded: bool = Field(..., description="Whether model weights are loaded.")
     version: str = Field(default="0.1.0")
     uptime_seconds: float = Field(..., description="Server uptime.")
+    
+    # Extended metrics
+    checks: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Detailed dependency checks."
+    )
+    total_predictions: Optional[int] = Field(
+        default=None,
+        description="Total predictions served since startup."
+    )
 
 
 class ErrorResponse(BaseModel):
