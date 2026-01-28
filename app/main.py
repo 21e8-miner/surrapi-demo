@@ -387,7 +387,6 @@ async def predict(request: PredictRequest):
         
         # Optional: Enforce mass conservation (arXiv 2025 method)
         if request.enforce_conservation:
-            import torch
             ux_t = torch.from_numpy(ux).unsqueeze(0).unsqueeze(0).float()
             uy_t = torch.from_numpy(uy).unsqueeze(0).unsqueeze(0).float()
             ux_t, uy_t = conservation_correction(ux_t, uy_t, iterations=5)
