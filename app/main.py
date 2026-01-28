@@ -35,7 +35,7 @@ from pydantic import ValidationError
 from app.model import (
     PhysicsAwareFNO, create_physics_aware_fno, conservation_correction,
     GeometryFactory, AdaptiveCFDOptimizer, GeometricOptimizer,
-    compute_adjoint_sensitivity, surface_force_integration
+    compute_adjoint_sensitivity, surface_force_integration, compute_trust_index
 )
 from app.schemas import (
     PredictRequest, PredictResponse,
@@ -379,7 +379,9 @@ async def predict(request: PredictRequest):
                 request.geometry_type,
                 request.geometry_params,
                 resolution,
-                request.reynolds
+                request.reynolds,
+                request.angle,
+                request.mach
             )
             # Update params for final prediction
             current_geo_params = optimized_params
@@ -412,14 +414,28 @@ async def predict(request: PredictRequest):
         x = bc.to(state.device)
         
         # Inference with Physics-Aware FNO + Adaptive Optimization
+        sensitivity_np = None
+        trust_index = None
+        
         if request.geometry_type != "none":
             # RE-ENTRY BREAKTHROUGH: Differentiable refinement for geometry
             out = state.optimizer.refine(x, request.reynolds, sdf)
-            std = None  # UQ disabled for optimization mode
+            
+            # QC: Should we run UQ in Design Mode? (Expensive but useful for trust)
+            if request.return_uncertainty:
+                _, std = state.model(x, return_uncertainty=True)
+            else:
+                std = None
             
             # ADJOINT BREAKTHROUGH: Compute sensitivity map
             sensitivity = compute_adjoint_sensitivity(out, request.reynolds)
             sensitivity_np = sensitivity.detach().cpu().numpy()[0, 0]
+            
+            # TRUST BREAKTHROUGH: Correlate Sensitivity with Uncertainty
+            if std is not None:
+                # Use pressure uncertainty as proxy
+                u_map = std[0, 2:3]
+                trust_index = compute_trust_index(sensitivity, u_map)
         else:
             with torch.no_grad():
                 out, std = state.model(
@@ -427,7 +443,6 @@ async def predict(request: PredictRequest):
                     enforce_conservation=request.enforce_conservation,
                     return_uncertainty=request.return_uncertainty
                 )
-            sensitivity_np = None
         
         # Extract fields
         out_np = out.detach().cpu().numpy()[0]
@@ -483,7 +498,7 @@ async def predict(request: PredictRequest):
             uy_std=uy_std,
             p_std=p_std,
             sensitivity_map=sensitivity_np.flatten().tolist() if sensitivity_np is not None else None,
-            sensitivity_map=sensitivity_np.flatten().tolist() if sensitivity_np is not None else None,
+            trust_index=trust_index,
             enstrophy=derived["enstrophy"],
             # If optimized, return the new params in a header or log? 
             # Ideally we update the response schema to return optimized params, but for now we rely on the visual update

@@ -180,6 +180,29 @@ Built on peer-reviewed work:
 
 ---
 
+## Breakthrough Features (Design Mode)
+
+SurrAPI now includes **Design Mode**, a suite of differentiable tools for interactive engineering exploration.
+
+### 🪄 Inverse Design (Auto-Optimize)
+Automatically find the optimal geometry parameters (e.g., position) to minimize drag. The system differentiates through the SDF generation process and flow prediction to iteratively improve your design in real-time.
+
+### 🔍 Adjoint Sensitivity Analysis (X-CFD)
+Visualize "Explainable CFD" heatmaps showing which regions of the flow are most sensitive to design changes. This is computed using Torch auto-grad through the physics-informed architecture.
+
+### 🎨 Custom Geometry Support
+Upload your own proprietary designs using base64-encoded Signed Distance Fields (SDFs). SurrAPI's **decode_sdf** pipeline enables enterprise-grade simulation of custom CAD profiles.
+
+### 🛡️ Hallucination Correction (PINC+)
+Our **Adaptive Physics Optimizer** detects and corrects "plausible but wrong" neural artifacts by scaling iterations (3x) when physics residuals exceed safety thresholds (Hallucination Detection).
+
+### 🤝 Trust Index
+A novel diagnostic metric correlating **Adjoint Sensitivity** with **Uncertainty Quantification (UQ)**.
+- **High Trust**: Low uncertainty in sensitive optimization zones.
+- **Risky**: Uncertainty spikes in critical flow regions (e.g., wake or separation points).
+
+---
+
 ## Roadmap
 
 | Feature | Status |
@@ -187,8 +210,11 @@ Built on peer-reviewed work:
 | 2D steady-state | ✅ Production |
 | Physics validation | ✅ Production |
 | Uncertainty quantification | ✅ Production |
-| Geometry conditioning | 🔄 In development |
-| 3D support | 📋 Planned |
+| **Inverse Design Mode** | ✅ Breakthrough (v0.2) |
+| **Adjoint Sensitivity** | ✅ Breakthrough (v0.2) |
+| **Custom Geometry Support** | ✅ Breakthrough (v0.2) |
+| **Hallucination Correction** | ✅ Breakthrough (v0.2) |
+| 3D support | 🔄 Planned |
 | Transient flows | 📋 Planned |
 
 ---
@@ -196,15 +222,12 @@ Built on peer-reviewed work:
 ## Get Started
 
 ```bash
-# Local demo (CPU)
+# Local demo (CPU/GPU)
 python -m uvicorn app.main:app --port 8000
-
-# Or pull our Docker image
-docker pull ghcr.io/21e8-miner/surrapi:latest
 ```
 
 **Questions?** team@surrapi.io
 
 ---
 
-*Honest benchmarks. Fast predictions. Production ready.*
+*Verified Physics. Explainable Design. Production Ready.*

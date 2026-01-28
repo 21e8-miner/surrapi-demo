@@ -262,6 +262,11 @@ class PredictResponse(BaseModel):
         description="Adjoint sensitivity map (Gradients of Drag w.r.t Flow). Highlights optimization zones."
     )
     
+    trust_index: Optional[float] = Field(
+        default=None,
+        description="Correlation between Sensitivity and Uncertainty. High values indicate 'Honest Risk' in prediction."
+    )
+    
     # Engineering Metrics
     enstrophy: Optional[float] = Field(
         default=None,

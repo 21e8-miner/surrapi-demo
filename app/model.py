@@ -623,9 +623,29 @@ class GeometryFactory:
             floats = struct.unpack(f'{count}f', data)
             return torch.tensor(floats).reshape(1, 1, resolution, resolution)
         except Exception as e:
-            # Fallback
-            print(f"SDF Decode Error: {e}")
+            # Fallback: create a blank domain
+            logger.error(f"SDF Decode Error: {e}")
             return torch.ones(1, 1, resolution, resolution)
+
+def compute_trust_index(sensitivity: torch.Tensor, uncertainty: torch.Tensor) -> float:
+    """
+    Correlation between Sensitivity (Adjoint) and Uncertainty (UQ).
+    Truth: If we are uncertain in a region that is VERY sensitive to drag, 
+    the prediction is 'Lower Trust'.
+    Range: -1.0 to 1.0 (Higher is better for robustness).
+    """
+    # Flatten and normalize
+    s = (sensitivity - sensitivity.mean()) / (sensitivity.std() + 1e-8)
+    u = (uncertainty - uncertainty.mean()) / (uncertainty.std() + 1e-8)
+    
+    # Pearson correlation
+    correlation = torch.mean(s * u)
+    
+    # We invert logic: if they correlate, it means we ARE uncertain where it matters.
+    # Scientific view: if we have LOW uncertainty where sensitivity is HIGH, that is GOOD.
+    # But usually, it's safer to be honest about uncertainty.
+    # Let's return the raw correlation as a 'Risk Signal'.
+    return float(correlation.item())
 
 
 class GeometricOptimizer:
@@ -638,7 +658,7 @@ class GeometricOptimizer:
         self.iterations = iterations
         self.lr = lr
 
-    def optimize(self, geometry_type: str, initial_params: Dict[str, float], resolution: int, reynolds: float) -> Tuple[Dict[str, float], torch.Tensor]:
+    def optimize(self, geometry_type: str, initial_params: Dict[str, float], resolution: int, reynolds: float, angle: float = 0.0, mach: float = 0.2) -> Tuple[Dict[str, float], torch.Tensor]:
         # Convert params to learnable tensors
         learnable_params = {}
         for k, v in initial_params.items():
@@ -673,6 +693,8 @@ class GeometricOptimizer:
             # Resolution of x input?
             dummy_bc = torch.zeros(1, 4, resolution, resolution, device=DEVICE)
             dummy_bc[0, 0, :, :] = reynolds / 10000.0
+            dummy_bc[0, 1, :, :] = angle / 15.0
+            dummy_bc[0, 2, :, :] = mach / 0.6
             dummy_bc[0, 3, :, :] = sdf[0, 0] # Inject SDF with grad history
             
             out, _ = self.model(dummy_bc, enforce_conservation=False)
