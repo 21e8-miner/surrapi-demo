@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SurrAPI - Instant CFD Predictions | 300ms Flow Simulation</title>
     <meta name="description"
-        content="SurrAPI delivers CFD predictions in 300ms instead of 3 hours. Pay-per-prediction API for engineering teams. Pre-trained on 15TB of physics data.">
+        content="SurrAPI delivers physics-validated CFD predictions in 300ms. Real-time uncertainty quantification, conservation correction, and production-ready REST API. Try the live demo.">
 
     <!-- Fonts -->
     <link
@@ -135,6 +135,23 @@
             padding: 8rem 2rem 4rem;
             background: var(--gradient-hero);
             position: relative;
+            overflow: hidden;
+        }
+
+        #fluidCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        .hero>*:not(#fluidCanvas) {
+            position: relative;
+            z-index: 1;
         }
 
         .hero::before {
@@ -883,17 +900,19 @@
 
     <!-- Hero Section -->
     <section class="hero">
+        <canvas id="fluidCanvas"></canvas>
         <div class="hero-badge">
-            <span>✨</span>
-            <span>Now in Public Beta</span>
+            <span>🚀</span>
+            <span>Production Ready</span>
         </div>
         <h1>CFD in <span>300ms</span>,<br>not 3 hours.</h1>
         <p class="hero-subtitle">
-            Pay-per-prediction API for instant flow field simulation.
-            Pre-trained on 15TB of physics data. Drop-in replacement for expensive CFD runs.
+            Neural surrogate API for instant flow field predictions.
+            Physics-validated outputs with uncertainty quantification.
         </p>
         <div>
             <a href="#demo" class="btn-primary">Try Live Demo</a>
+            <a href="/docs" class="btn-secondary" style="margin-left: 1rem;">API Docs</a>
         </div>
         <div class="hero-stats">
             <div class="stat">
@@ -901,19 +920,18 @@
                 <div class="stat-label">Inference Time</div>
             </div>
             <div class="stat">
-                <div class="stat-value">$0.25</div>
-                <div class="stat-label">Per Prediction</div>
+                <div class="stat-value">1.5-3%</div>
+                <div class="stat-label">L² Error</div>
             </div>
             <div class="stat">
-                <div class="stat-value">15TB</div>
-                <div class="stat-label">Training Data</div>
+                <div class="stat-value">95%+</div>
+                <div class="stat-label">Physics Score</div>
             </div>
             <div class="stat">
-                <div class="stat-value">
-                    <1%< /div>
-                        <div class="stat-label">L² Error</div>
-                </div>
+                <div class="stat-value">24/7</div>
+                <div class="stat-label">API Uptime</div>
             </div>
+        </div>
     </section>
 
     <!-- Demo Section -->
@@ -1400,6 +1418,137 @@ result.<span class="function">save_vtk</span>(<span class="string">"flow_field.v
         setTimeout(() => {
             runPrediction();
         }, 500);
+    </script>
+
+    <!-- WebGL Fluid Simulation Background -->
+    <script>
+        (function () {
+            const canvas = document.getElementById('fluidCanvas');
+            if (!canvas) return;
+
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (!gl) return;
+
+            // Resize canvas
+            function resize() {
+                canvas.width = canvas.offsetWidth;
+                canvas.height = canvas.offsetHeight;
+                gl.viewport(0, 0, canvas.width, canvas.height);
+            }
+            resize();
+            window.addEventListener('resize', resize);
+
+            // Shaders
+            const vertexShader = `
+                attribute vec2 position;
+                void main() {
+                    gl_Position = vec4(position, 0.0, 1.0);
+                }
+            `;
+
+            const fragmentShader = `
+                precision highp float;
+                uniform float time;
+                uniform vec2 resolution;
+                uniform vec2 mouse;
+                
+                // Noise function for fluid-like motion
+                float noise(vec2 p) {
+                    return sin(p.x * 3.0 + sin(p.y * 4.0 + time)) * 
+                           cos(p.y * 3.0 + sin(p.x * 5.0 + time * 0.7)) * 0.5 + 0.5;
+                }
+                
+                // Vortex pattern
+                float vortex(vec2 p, vec2 center, float strength) {
+                    vec2 d = p - center;
+                    float angle = atan(d.y, d.x) + time * strength;
+                    float r = length(d);
+                    return sin(angle * 3.0 + r * 8.0 - time * 2.0) * exp(-r * 4.0);
+                }
+                
+                void main() {
+                    vec2 uv = gl_FragCoord.xy / resolution;
+                    vec2 p = uv * 2.0 - 1.0;
+                    p.x *= resolution.x / resolution.y;
+                    
+                    // Multiple vortex centers
+                    float v1 = vortex(p, vec2(-0.5, 0.3), 1.0);
+                    float v2 = vortex(p, vec2(0.4, -0.2), -0.8);
+                    float v3 = vortex(p, mouse * 2.0 - 1.0, 1.5);
+                    
+                    // Combine with noise
+                    float n = noise(p * 2.0 + time * 0.3);
+                    float flow = v1 + v2 + v3 * 0.5 + n * 0.3;
+                    
+                    // Color gradient (cyan to purple)
+                    vec3 color1 = vec3(0.0, 0.83, 1.0);  // #00d4ff
+                    vec3 color2 = vec3(0.49, 0.23, 0.93); // #7c3aed
+                    vec3 color = mix(color1, color2, flow * 0.5 + 0.5);
+                    
+                    // Add glow
+                    float glow = smoothstep(0.3, 0.0, abs(flow)) * 0.5;
+                    color += vec3(glow * 0.3, glow * 0.5, glow * 0.8);
+                    
+                    // Fade edges
+                    float fade = smoothstep(1.0, 0.3, length(p));
+                    
+                    gl_FragColor = vec4(color * fade * 0.6, 1.0);
+                }
+            `;
+
+            // Compile shaders
+            function createShader(type, source) {
+                const shader = gl.createShader(type);
+                gl.shaderSource(shader, source);
+                gl.compileShader(shader);
+                return shader;
+            }
+
+            const vs = createShader(gl.VERTEX_SHADER, vertexShader);
+            const fs = createShader(gl.FRAGMENT_SHADER, fragmentShader);
+
+            const program = gl.createProgram();
+            gl.attachShader(program, vs);
+            gl.attachShader(program, fs);
+            gl.linkProgram(program);
+            gl.useProgram(program);
+
+            // Full-screen quad
+            const buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                -1, -1, 1, -1, -1, 1, 1, 1
+            ]), gl.STATIC_DRAW);
+
+            const position = gl.getAttribLocation(program, 'position');
+            gl.enableVertexAttribArray(position);
+            gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+
+            // Uniforms
+            const timeUniform = gl.getUniformLocation(program, 'time');
+            const resolutionUniform = gl.getUniformLocation(program, 'resolution');
+            const mouseUniform = gl.getUniformLocation(program, 'mouse');
+
+            let mouseX = 0.5, mouseY = 0.5;
+            document.addEventListener('mousemove', (e) => {
+                mouseX = e.clientX / window.innerWidth;
+                mouseY = 1.0 - e.clientY / window.innerHeight;
+            });
+
+            // Animation loop
+            let startTime = Date.now();
+            function render() {
+                const time = (Date.now() - startTime) * 0.001;
+
+                gl.uniform1f(timeUniform, time);
+                gl.uniform2f(resolutionUniform, canvas.width, canvas.height);
+                gl.uniform2f(mouseUniform, mouseX, mouseY);
+
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+                requestAnimationFrame(render);
+            }
+            render();
+        })();
     </script>
 </body>
 
