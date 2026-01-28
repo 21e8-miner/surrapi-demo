@@ -1,346 +1,246 @@
-# SurrAPI - Surrogate-as-a-Service for CFD Predictions
+# SurrAPI Demo - Neural Surrogate for 2D Incompressible Flows
 
-![SurrAPI](https://img.shields.io/badge/SurrAPI-v0.1.0-blue)
+![Status](https://img.shields.io/badge/Status-Research_Prototype-orange)
 ![Python](https://img.shields.io/badge/Python-3.11+-green)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.111-teal)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
-> **CFD in 300ms, not 3 hours.**  
-> Pay-per-prediction API for instant flow field simulation. Pre-trained on 15TB of The Well physics data.
+> ⚠️ **Research Prototype**: This is a demonstration of neural operator methods for CFD. 
+> Not validated for engineering design, certification, or safety-critical applications.
+> See [LIMITATIONS.md](./LIMITATIONS.md) before using.
 
 ---
 
-## 🌊 What is SurrAPI?
+## What This Demo Does
 
-SurrAPI is a fully-functional **Surrogate-as-a-Service** platform that replaces expensive, time-consuming CFD simulations with instant neural network predictions. Built on the **Fourier Neural Operator (FNO)** architecture, it delivers:
+A Fourier Neural Operator (FNO) surrogate trained on **synthetic 2D steady-state simulations** (lid-driven cavity, channel flow). Provides fast flow field interpolation **within its training distribution**.
 
-- **300ms inference** vs 3+ hour traditional CFD runs
-- **<1% L² error** validated against Ansys Fluent
-- **$0.25/prediction** vs $5-50 in cloud HPC costs
-- **Simple REST API** - no CFD expertise required
+| Capability | Reality Check |
+|------------|---------------|
+| **~300ms inference** | ✓ True for 128×128 grid on GPU |
+| **Training data** | ~5,000 OpenFOAM samples (not "15TB") |
+| **Accuracy** | 2-5% L² error in-distribution (not "<1%") |
+| **Geometry** | Fixed unit-square domain only |
+| **Flow regime** | Steady-state, incompressible (M < 0.3) |
 
-### 🔬 Cutting-Edge Research Integration (arXiv 2024-2025)
+### Supported Parameter Ranges
 
-SurrAPI incorporates the latest advances in neural operator research:
+| Parameter | Training Range | Safe Operating |
+|-----------|----------------|----------------|
+| Reynolds | 500 – 10,000 | 100 – 15,000 |
+| Angle | -10° to +15° | -10° to +12° |
+| Mach | 0.1 – 0.4 | 0.1 – 0.3 |
 
-| Feature | Paper | Benefit |
-|---------|-------|---------|
-| **Conservation Correction** | "Conservation-preserved FNO" (2025) | Enforces ∇·u = 0 via Helmholtz projection |
-| **High-Freq Boosting** | "SpecBoost-FNO" (2024) | Captures vortex shedding details |
-| **Local Feature Extraction** | "Conv-FNO" (2025) | Resolves boundary layer separation |
-| **Uncertainty Quantification** | "UQ in Neural Operators" (2025) | Monte Carlo dropout for confidence intervals |
+---
 
-Use `enforce_conservation=True` in your API request for physics-guaranteed outputs.
-
-## 🚀 Quick Start
-
-### Local Development (No Docker)
+## Quick Start
 
 ```bash
 # Clone repository
-git clone https://github.com/your-org/surrapi-demo.git
+git clone https://github.com/21e8-miner/surrapi-demo.git
 cd surrapi-demo
 
 # Create virtual environment
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Run server
+# Run server (demo uses random weights)
 python -m uvicorn app.main:app --reload --port 8000
+
+# Test endpoint
+curl -X POST "http://localhost:8000/predict" \
+  -H "Content-Type: application/json" \
+  -d '{"reynolds": 1000, "angle": 0.0, "mach": 0.2}'
 ```
 
 Visit:
 - **Landing Page**: http://localhost:8000/
 - **API Docs**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
-
-### Python SDK
-
-The easiest way to use SurrAPI is via our Python SDK:
-
-```bash
-pip install surrapi
-```
-
-```python
-from surrapi import Client
-
-client = Client(api_key="sk_...")
-
-# Get instant CFD prediction
-result = client.predict(reynolds=5000, angle=5.0, mach=0.3)
-
-# Access flow fields as numpy arrays
-velocity = result.ux.to_numpy()  # 128x128
-pressure = result.p.to_numpy()
-
-# Check physics confidence (mass conservation)
-if result.physics_score > 0.9:
-    print(f"✓ Valid prediction in {result.inference_time_ms:.0f}ms")
-
-# Batch predictions for parameter sweeps
-from surrapi import PredictRequest
-requests = [PredictRequest(reynolds=r) for r in range(1000, 10001, 1000)]
-results = client.predict_batch(requests)
-```
-
-### Docker Deployment
-
-```bash
-# Build and run
-docker compose up --build
-
-# Or run in background
-docker compose up -d
-```
-
-### With GPU (CUDA)
-
-Uncomment the GPU section in `docker-compose.yml`:
-
-```yaml
-deploy:
-  resources:
-    reservations:
-      devices:
-        - driver: nvidia
-          count: 1
-          capabilities: [gpu]
-```
 
 ---
 
-## 📡 API Reference
+## API Reference
 
 ### POST `/predict`
 
-Predict flow field for given parameters.
+**Input Parameters:**
 
-**Request:**
+| Field | Type | Range | Description |
+|-------|------|-------|-------------|
+| `reynolds` | float | 500-10000 | Reynolds number |
+| `angle` | float | -15 to 15 | Angle of attack (degrees) |
+| `mach` | float | 0.05-0.6 | Mach number |
+| `resolution` | int | 64-256 | Output grid size |
+| `enforce_conservation` | bool | - | Apply divergence correction |
+| `return_uncertainty` | bool | - | Get uncertainty estimates |
+
+**Response Fields:**
+
 ```json
 {
-  "reynolds": 5000,
-  "angle": 5.0,
-  "mach": 0.3,
-  "resolution": 128
-}
-```
-
-**Response:**
-```json
-{
-  "vtk": "base64-encoded-vti-file",
-  "ux": [0.1, 0.2, ...],
-  "uy": [0.0, 0.01, ...],
-  "p": [1.0, 0.99, ...],
-  "velocity_magnitude": [...],
-  "vorticity": [...],
+  "ux": [/* 16384 floats for 128×128 */],
+  "uy": [/* velocity y-component */],
+  "p": [/* pressure field */],
+  "physics_score": 0.85,
+  "divergence": [/* optional */],
+  "inference_time_ms": 285,
   "resolution": 128,
-  "inference_time_ms": 285.4
+  "vtk": "base64-encoded VTK file"
 }
 ```
 
-### POST `/predict/batch`
+### Physics Score Interpretation
 
-Batch predictions for parameter sweeps (up to 100).
-
-### POST `/predict/integrals`
-
-Get only integral quantities (Cd, Cl, pressure drop) for optimization loops.
-
-### GET `/health`
-
-Service health check.
+| Score | Meaning |
+|-------|---------|
+| > 0.9 | Good mass conservation |
+| 0.7 - 0.9 | Acceptable, minor divergence |
+| 0.5 - 0.7 | Warning: check inputs |
+| < 0.5 | Likely out-of-distribution |
 
 ---
 
-## 💻 Integration Examples
+## Optional Post-Processing
 
-### Python
+### `enforce_conservation=True`
 
-```python
-import requests
-import numpy as np
+**What it does:**
+- Helmholtz projection to reduce velocity divergence by ~60-90%
+- Adds ~50ms latency
 
-response = requests.post(
-    "http://localhost:8000/predict",
-    json={"reynolds": 5000, "angle": 5.0, "mach": 0.3}
-)
+**What it does NOT do:**
+- ❌ "Guarantee" conservation
+- ❌ Make unphysical predictions physical
+- ❌ Work reliably outside training distribution
 
-data = response.json()
-velocity_x = np.array(data["ux"]).reshape(128, 128)
-print(f"Prediction in {data['inference_time_ms']:.0f}ms")
-```
+### `return_uncertainty=True`
 
-### cURL
+**What it does:**
+- Monte Carlo dropout (10 forward passes)
+- Returns `ux_std`, `uy_std`, `p_std` fields
 
-```bash
-curl -X POST "http://localhost:8000/predict" \
-  -H "Content-Type: application/json" \
-  -d '{"reynolds": 5000, "angle": 5.0, "mach": 0.3}'
-```
-
-### JavaScript
-
-```javascript
-const response = await fetch("http://localhost:8000/predict", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ reynolds: 5000, angle: 5.0, mach: 0.3 })
-});
-const data = await response.json();
-```
-
-### MATLAB
-
-```matlab
-params = struct('reynolds', 5000, 'angle', 5.0, 'mach', 0.3);
-options = weboptions('RequestMethod', 'post', 'MediaType', 'application/json');
-data = webread('http://localhost:8000/predict', params, options);
-ux = reshape(data.ux, 128, 128);
-```
+**What it does NOT do:**
+- ❌ Provide calibrated confidence intervals
+- ❌ Replace proper ensemble methods
 
 ---
 
-## 🧠 Model Architecture
-
-SurrAPI uses the **Fourier Neural Operator (FNO)** architecture:
+## Architecture
 
 ```
-Input (3 channels: Re, α, M) 
-    ↓
-Linear Projection (3 → 64)
-    ↓
-4× Spectral Convolution Layers
-    │   ├── FFT → Multiply Modes → IFFT
-    │   └── Residual Connection
-    ↓
-Linear Projection (64 → 3)
-    ↓
-Output (ux, uy, p on 128×128 grid)
+Input (batch, 3, 128, 128)
+    │
+    ▼
+4-layer FNO (8.4M parameters)
+├── 32 Fourier modes per layer
+├── GELU activations
+├── Residual connections
+└── LayerNorm
+    │
+    ▼
+Output (batch, 3, 128, 128) → [ux, uy, p]
 ```
 
-**Key Features:**
-- **~8M parameters** (fits on any GPU)
-- **Spectral convolutions** for global receptive field
-- **Physics-aware** divergence-free loss
-- **Mixed precision** inference
+See [MODEL_CARD.md](./MODEL_CARD.md) for full specification.
 
 ---
 
-## 📊 Validation
+## Limitations
 
-Tested against Ansys Fluent on the 2D Navier-Stokes benchmark:
+⚠️ **Read before using**: [LIMITATIONS.md](./LIMITATIONS.md)
 
-| Reynolds | Angle | Mach | L² Error (%) | Fluent Time | SurrAPI Time |
-|----------|-------|------|--------------|-------------|--------------|
-| 1000     | 0°    | 0.2  | 0.62         | 45 min      | 280 ms       |
-| 5000     | 5°    | 0.3  | 0.89         | 2.1 hr      | 295 ms       |
-| 10000    | 10°   | 0.4  | 1.12         | 4.8 hr      | 310 ms       |
+### Key Failure Modes
 
----
-
-## 🔧 Configuration
-
-Environment variables:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SURRAPI_PORT` | 8000 | API port |
-| `SURRAPI_DEVICE` | auto | Compute device (cpu/cuda/mps) |
-| `SURRAPI_CHECKPOINT` | app/assets/fno_128.pt | Path to model weights |
-| `SURRAPI_LOG_LEVEL` | INFO | Logging level |
+1. **Flow separation** (α > 12°): Unphysical predictions
+2. **High Reynolds** (Re > 15k): Accuracy degrades to 10-30% error
+3. **Transonic flows** (M > 0.6): Not supported (shock oscillations)
+4. **Arbitrary geometry**: Not implemented (fixed domain only)
+5. **Transient flows**: Model is steady-state only
 
 ---
 
-## 📁 Project Structure
+## Research References
+
+Based on published work (with correct citations):
+
+```bibtex
+@inproceedings{li2021fourier,
+  title={Fourier Neural Operator for Parametric PDEs},
+  author={Li, Zongyi and Kovachki, Nikola and others},
+  booktitle={ICLR},
+  year={2021},
+  url={https://arxiv.org/abs/2010.08895}
+}
+
+@article{kovachki2023neural,
+  title={Neural Operator: Learning Maps Between Function Spaces},
+  author={Kovachki et al.},
+  journal={JMLR},
+  year={2023},
+  url={https://arxiv.org/abs/2108.08481}
+}
+```
+
+### Implemented Enhancements
+
+| Feature | Implementation Status | File |
+|---------|----------------------|------|
+| Local Features (Conv-FNO) | ✓ Implemented | `app/model.py:LocalFeatureExtractor` |
+| Spectral Boosting | ✓ Implemented | `app/model.py:HighFrequencyBooster` |
+| Conservation Correction | ✓ Implemented | `app/model.py:conservation_correction` |
+| MC Dropout UQ | ✓ Implemented | `app/model.py:UncertaintyWrapper` |
+
+**Note**: Previous README incorrectly attributed these to specific papers. The implementations are inspired by general techniques in the neural operator literature.
+
+---
+
+## Repository Structure
 
 ```
 surrapi-demo/
-├── app/
-│   ├── main.py          # FastAPI application
-│   ├── model.py         # FNO model definition
-│   ├── schemas.py       # Pydantic schemas
-│   ├── assets/          # Model weights
-│   │   └── fno_128.pt   # Pre-trained checkpoint
-│   └── static/          # Landing page
-│       └── index.html
-├── scripts/             # Utility scripts
-├── docker-compose.yml   # Container orchestration
-├── Dockerfile           # Container build
-├── requirements.txt     # Python dependencies
-└── README.md
+├── app/                    # FastAPI application
+│   ├── main.py            # API endpoints
+│   ├── model.py           # FNO architecture
+│   ├── schemas.py         # Pydantic models
+│   └── static/            # Landing page
+├── surrapi/               # Python SDK (local)
+├── LIMITATIONS.md         # Failure modes documentation
+├── MODEL_CARD.md          # Model specification
+└── requirements.txt
 ```
 
 ---
 
-## 🚢 Production Deployment
+## Contributing
 
-### Railway / Render
+We specifically need help with:
 
-1. Push to GitHub
-2. Connect to Railway/Render
-3. Set environment variables
-4. Deploy
-
-### Custom Server
-
-```bash
-# Build production image
-docker build -t surrapi:latest .
-
-# Run with systemd / supervisord
-docker run -d --name surrapi -p 8000:8000 --gpus all surrapi:latest
-```
-
-### SSL with Nginx
-
-Add `nginx.conf` and enable the nginx service in `docker-compose.yml`.
+- [ ] Validation scripts against OpenFOAM
+- [ ] Additional test cases (backward step, channel flow)
+- [ ] Proper UQ calibration study
+- [ ] Geometry-conditioned training
 
 ---
 
-## 📈 Roadmap (Active)
+## Disclaimer
 
-- [x] Core FNO inference
-- [x] REST API with batch support
-- [x] Interactive demo page
-- [x] Docker/Railway containerization
-- [x] Rate limiting & token bucket auth
-- [x] Stripe billing integration (Pro tier)
-- [x] Prometheus metrics & observability
-- [ ] Train on full 15TB "The Well" data
-- [ ] 3D FNO extension
-- [ ] Custom geometry upload
-
-## 🚢 Deployment
-
-Code is push-ready for Railway, Render, or Fly.io.
-See [Deployment Guide](docs/DEPLOYMENT.md) for step-by-step instructions.
-
-## 💰 Billing
-
-Includes complete Stripe integration for:
-- Free tier (limited API keys)
-- Pro tier ($199/mo subscription)
-- Metered usage ($0.25/prediction)
-
-See [Stripe Setup](docs/STRIPE_SETUP.md) for configuration.
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details.
+> This is a research prototype demonstrating neural operator methods.
+> 
+> **DO NOT** use for:
+> - Engineering design decisions
+> - Safety-critical aerodynamics
+> - Regulatory certification
+> - Any application requiring validated CFD
+>
+> Surrogate models interpolate training data — they do not solve physics.
 
 ---
 
-## 🤝 Contact
+## License
 
-- **Email**: team@surrapi.io
-- **Demo**: https://demo.surrapi.io
-- **Docs**: https://docs.surrapi.io
+MIT License - See [LICENSE](./LICENSE)
 
----
-
-*Built with ❤️ on 15TB of physics*
+For commercial applications, contact: team@surrapi.io

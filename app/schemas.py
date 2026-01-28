@@ -93,12 +93,46 @@ class PredictRequest(BaseModel):
         description="Return uncertainty estimates via Monte Carlo dropout. Adds ~200ms latency (10 samples)."
     )
     
+    # Validators for physics-based input checking
+    @validator('reynolds')
+    def validate_reynolds(cls, v):
+        if v > 15000:
+            import warnings
+            warnings.warn(
+                f"Re={v} exceeds safe operating range (15000). "
+                "Predictions will degrade significantly. See LIMITATIONS.md",
+                UserWarning
+            )
+        return v
+    
+    @validator('angle')
+    def validate_angle(cls, v):
+        if abs(v) > 12:
+            import warnings
+            warnings.warn(
+                f"α={v}° may cause flow separation. "
+                "Model not trained on separated flows. See LIMITATIONS.md",
+                UserWarning
+            )
+        return v
+    
+    @validator('mach')
+    def validate_mach(cls, v):
+        if v > 0.3:
+            import warnings
+            warnings.warn(
+                f"Mach={v} violates incompressible flow assumption (M < 0.3). "
+                "Results may be unreliable for compressibility effects.",
+                UserWarning
+            )
+        return v
+    
     class Config:
         json_schema_extra = {
             "example": {
                 "reynolds": 5000,
                 "angle": 5.0,
-                "mach": 0.3,
+                "mach": 0.2,
                 "flow_type": "navier_stokes",
                 "resolution": 128
             }
