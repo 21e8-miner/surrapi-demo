@@ -979,6 +979,32 @@
                     </p>
                 </div>
 
+                <div class="design-section"
+                    style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px; margin-top: 20px;">
+                    <h4 style="margin-bottom: 15px; font-size: 14px; text-transform: uppercase; color: #00d4ff;">Design
+                        Mode (Breakthrough)</h4>
+                    <div class="control-group">
+                        <div class="control-label">
+                            <span>Obstacle Geometry</span>
+                        </div>
+                        <select id="geometryType"
+                            style="width: 100%; background: #222; color: #fff; border: 1px solid #444; padding: 8px; border-radius: 4px;">
+                            <option value="cylinder">Cylinder (Benchmark)</option>
+                            <option value="airfoil">NACA 0012 Airfoil</option>
+                            <option value="square">Square Block</option>
+                            <option value="none">Empty Channel</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-label">
+                            <span>Position X</span>
+                            <span class="control-value" id="geomXValue">0.30</span>
+                        </div>
+                        <input type="range" id="geomX" min="0.1" max="0.6" value="0.3" step="0.01">
+                    </div>
+                </div>
+
                 <button class="predict-btn" id="predictBtn" onclick="runPrediction()">
                     <span class="spinner"></span>
                     <span>🚀 Predict Flow Field</span>
@@ -1267,9 +1293,13 @@ result.<span class="function">save_vtk</span>(<span class="string">"flow_field.v
         document.getElementById('angle').oninput = function () {
             document.getElementById('angleValue').textContent = this.value + '°';
         };
-        document.getElementById('mach').oninput = function () {
-            document.getElementById('machValue').textContent = parseFloat(this.value).toFixed(2);
-        };
+        document.getElementById('mach').addEventListener('input', e => {
+            document.getElementById('machValue').textContent = parseFloat(e.target.value).toFixed(2);
+        });
+
+        document.getElementById('geomX').addEventListener('input', e => {
+            document.getElementById('geomXValue').textContent = parseFloat(e.target.value).toFixed(2);
+        });
 
         // Initialize empty plot
         function initPlot() {
@@ -1322,7 +1352,15 @@ result.<span class="function">save_vtk</span>(<span class="string">"flow_field.v
                 reynolds: parseFloat(document.getElementById('reynolds').value),
                 angle: parseFloat(document.getElementById('angle').value),
                 mach: parseFloat(document.getElementById('mach').value),
-                return_uncertainty: document.getElementById('returnUncertainty').checked
+                return_uncertainty: document.getElementById('returnUncertainty').checked,
+                geometry_type: document.getElementById('geometryType').value,
+                geometry_params: {
+                    x: parseFloat(document.getElementById('geomX').value),
+                    y: 0.5,
+                    radius: 0.05,
+                    scale: 0.2,
+                    side: 0.05
+                }
             };
 
             try {
@@ -1391,11 +1429,19 @@ result.<span class="function">save_vtk</span>(<span class="string">"flow_field.v
             let data = currentData[field];
             if (!data) return;
 
-            // Reshape to 2D
+            // Reshape to 2D and apply geometry mask if present
             const resolution = currentData.resolution || 128;
+            const mask = currentData.geometry_mask;
             const z = [];
             for (let i = 0; i < resolution; i++) {
-                z.push(data.slice(i * resolution, (i + 1) * resolution));
+                const row = data.slice(i * resolution, (i + 1) * resolution);
+                if (mask) {
+                    const maskRow = mask.slice(i * resolution, (i + 1) * resolution);
+                    for (let j = 0; j < resolution; j++) {
+                        if (maskRow[j] > 0.5) row[j] = null; // Mask solid regions
+                    }
+                }
+                z.push(row);
             }
 
             // Choose colorscale based on field

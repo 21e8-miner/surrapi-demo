@@ -32,7 +32,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pydantic import ValidationError
 
-from app.model import PhysicsAwareFNO, create_physics_aware_fno, conservation_correction
+from app.model import (
+    PhysicsAwareFNO, create_physics_aware_fno, conservation_correction,
+    GeometryFactory, AdaptiveCFDOptimizer
+)
 from app.schemas import (
     PredictRequest, PredictResponse,
     BatchPredictRequest, BatchPredictResponse,
@@ -86,6 +89,7 @@ logger = logging.getLogger("surrapi")
 
 class AppState:
     model: Optional[PhysicsAwareFNO] = None
+    optimizer: Optional[AdaptiveCFDOptimizer] = None
     device: str = DEVICE
     start_time: datetime = datetime.now()
     total_predictions: int = 0
@@ -209,11 +213,15 @@ async def lifespan(app: FastAPI):
         device=DEVICE,
         enable_all_features=True
     )
+    
+    # Initialize Breakthrough Physics Optimizer
+    state.optimizer = AdaptiveCFDOptimizer(state.model, iterations=5)
+    
     state.start_time = datetime.now()
     
     # Warmup inference
     with torch.no_grad():
-        dummy = torch.randn(1, 3, 128, 128).to(DEVICE)
+        dummy = torch.randn(1, 4, 128, 128).to(DEVICE)
         _, _ = state.model(dummy)
     logger.info("✓ Model warmed up and ready")
     
@@ -359,45 +367,50 @@ async def predict(request: PredictRequest):
     try:
         # Build input tensor from parameters
         resolution = request.resolution
-        bc = torch.zeros(1, 3, resolution, resolution)
+        bc = torch.zeros(1, 4, resolution, resolution)  # 4 channels: Re, alpha, Mach, SDF
         
         # Encode parameters as spatial fields
-        # Channel 0: Reynolds number (normalized)
         bc[0, 0, :, :] = request.reynolds / 10000.0
-        
-        # Channel 1: Angle of attack (normalized) 
         bc[0, 1, :, :] = request.angle / 15.0
-        
-        # Channel 2: Mach number (normalized)
         bc[0, 2, :, :] = request.mach / 0.6
         
-        # First Principles: Apply Dirichlet boundary if inlet velocity provided
-        if request.inlet_velocity:
-            # We assume Ch0 is velocity-related for 'The Well' FNO baselines
-            y = torch.linspace(-1, 1, resolution)
-            parabola = 1 - y**2
-            # Superimpose inlet profile on top of the base Reynolds scaling
-            # This represents a spatially varying BC within the parameter field
-            bc[0, 0, :, 0] = (request.inlet_velocity / 10.0) * parabola
+        # Breakthrough: Generate Geometry SDF
+        sdf = GeometryFactory.generate_sdf(
+            request.geometry_type, 
+            request.geometry_params, 
+            resolution
+        ).to(state.device)
+        bc[0, 3, :, :] = sdf[0, 0]
         
         # Move to device
         x = bc.to(state.device)
         
-        # Inference with Physics-Aware FNO
-        # This handles SpecBoost, Local Features, and Conservation optionally
-        with torch.no_grad():
-            out, std = state.model(
-                x, 
-                enforce_conservation=request.enforce_conservation,
-                return_uncertainty=request.return_uncertainty
-            )
+        # Inference with Physics-Aware FNO + Adaptive Optimization
+        if request.geometry_type != "none":
+            # RE-ENTRY BREAKTHROUGH: Differentiable refinement for geometry
+            out = state.optimizer.refine(x, request.reynolds, sdf)
+            std = None  # UQ disabled for optimization mode (demo latency balance)
+        else:
+            with torch.no_grad():
+                out, std = state.model(
+                    x, 
+                    enforce_conservation=request.enforce_conservation,
+                    return_uncertainty=request.return_uncertainty
+                )
         
         # Extract fields
-        out_np = out.detach().cpu().numpy()[0]  # Shape: (3, H, W)
-        ux = out_np[0]  # X-velocity
-        uy = out_np[1]  # Y-velocity
-        p = out_np[2]   # Pressure
+        out_np = out.detach().cpu().numpy()[0]
+        ux = out_np[0]
+        uy = out_np[1]
+        p = out_np[2]
 
+        # Geometry Mask (1 inside obstacle, 0 outside)
+        mask_np = (sdf.cpu().numpy()[0, 0] < 0).astype(float)
+        
+        # Force hard BCs on geometry
+        ux[mask_np > 0.5] = 0
+        uy[mask_np > 0.5] = 0
+        
         # Handle uncertainty std devs if requested
         ux_std, uy_std, p_std = None, None, None
         if std is not None:
@@ -406,18 +419,9 @@ async def predict(request: PredictRequest):
             uy_std = std_np[1].flatten().tolist()
             p_std = std_np[2].flatten().tolist()
         
-        # Post-process: apply physical constraints
-        # Ensure zero velocity at boundaries (no-slip)
-        # Top/Bottom
-        ux[0, :] = 0
-        ux[-1, :] = 0
-        uy[0, :] = 0
-        uy[-1, :] = 0
-        # Right boundary (outlet - often free but we enforce no-slip for stability in demo)
-        ux[:, -1] = 0
-        uy[:, -1] = 0
-        # Inlet left (uy should be 0)
-        uy[:, 0] = 0
+        # Post-process: apply domain boundary constraints
+        ux[0, :] = 0; ux[-1, :] = 0; uy[0, :] = 0; uy[-1, :] = 0
+        ux[:, -1] = 0; uy[:, -1] = 0; uy[:, 0] = 0
         
         # Compute derived quantities
         derived = compute_derived_quantities(ux, uy, p)
@@ -429,8 +433,8 @@ async def predict(request: PredictRequest):
         inference_ms = (t1 - t0) * 1000
         
         state.total_predictions += 1
-        logger.info(f"Prediction #{state.total_predictions}: Re={request.reynolds:.0f}, "
-                   f"α={request.angle:.1f}°, M={request.mach:.2f} → {inference_ms:.1f}ms")
+        logger.info(f"Design Prediction #{state.total_predictions}: Ge={request.geometry_type}, "
+                   f"Re={request.reynolds:.0f} → {inference_ms:.1f}ms")
         
         return PredictResponse(
             vtk=vti,
@@ -447,6 +451,7 @@ async def predict(request: PredictRequest):
             enstrophy=derived["enstrophy"],
             drag_coefficient=derived["drag_coefficient"],
             lift_coefficient=derived["lift_coefficient"],
+            geometry_mask=mask_np.flatten().tolist(),
             resolution=resolution,
             inference_time_ms=inference_ms
         )

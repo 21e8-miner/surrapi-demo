@@ -23,6 +23,15 @@ class BoundaryCondition(str, Enum):
     NO_SLIP = "no_slip"
 
 
+class GeometryType(str, Enum):
+    """Supported obstacle geometries"""
+    NONE = "none"
+    CYLINDER = "cylinder"
+    SQUARE = "square"
+    AIRFOIL = "airfoil"
+    RANDOM = "random"
+
+
 # -------------------------------------------------------------------
 # Request Schemas
 # -------------------------------------------------------------------
@@ -91,6 +100,16 @@ class PredictRequest(BaseModel):
     return_uncertainty: bool = Field(
         default=False,
         description="Return uncertainty estimates via Monte Carlo dropout. Adds ~200ms latency (10 samples)."
+    )
+    
+    geometry_type: GeometryType = Field(
+        default=GeometryType.CYLINDER,
+        description="Type of obstacle to insert into the flow."
+    )
+    
+    geometry_params: Dict[str, Any] = Field(
+        default_factory=lambda: {"x": 0.3, "y": 0.5, "radius": 0.05},
+        description="Parameters for the selected geometry (x, y, scale, etc.)."
     )
     
     # Validators for physics-based input checking
@@ -245,6 +264,12 @@ class PredictResponse(BaseModel):
     lift_coefficient: Optional[float] = Field(
         default=None,
         description="Estimated lift coefficient (transverse pressure force)."
+    )
+    
+    # Geometry metadata
+    geometry_mask: Optional[List[float]] = Field(
+        default=None,
+        description="Boolean mask of the obstacle geometry (1=solid, 0=fluid)."
     )
     
     # Metadata

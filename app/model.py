@@ -404,7 +404,7 @@ class PhysicsAwareFNO(nn.Module):
         self,
         modes: int = 32,
         width: int = 64,
-        in_channels: int = 3,
+        in_channels: int = 4,
         out_channels: int = 3,
         num_layers: int = 4,
         enable_local_features: bool = True,
@@ -562,49 +562,171 @@ def create_physics_aware_fno(
 
 
 # -------------------------------------------------------------------
-# Physics-aware loss functions (for training / fine-tuning)
+# THE BREAKTHROUGH: Differentiable Physics Optimization
 # -------------------------------------------------------------------
 
-def divergence_free_loss(ux: torch.Tensor, uy: torch.Tensor) -> torch.Tensor:
-    """
-    Enforce divergence-free condition for incompressible flow.
-    ∇·u = ∂ux/∂x + ∂uy/∂y = 0
-    """
-    # Central differences
-    dux_dx = (ux[:, :, :, 2:] - ux[:, :, :, :-2]) / 2
-    duy_dy = (uy[:, :, 2:, :] - uy[:, :, :-2, :]) / 2
+class GeometryFactory:
+    """Generates Signed Distance Functions (SDF) for arbitrary obstacles"""
     
-    # Trim to match sizes
-    dux_dx = dux_dx[:, :, 1:-1, :]
-    duy_dy = duy_dy[:, :, :, 1:-1]
-    
-    divergence = dux_dx + duy_dy
-    return torch.mean(divergence ** 2)
+    @staticmethod
+    def generate_sdf(shape_type: str, params: dict, resolution: int = 128) -> torch.Tensor:
+        x = torch.linspace(0, 1, resolution)
+        y = torch.linspace(0, 1, resolution)
+        grid_y, grid_x = torch.meshgrid(y, x, indexing='ij')
+        
+        cx, cy = params.get("x", 0.5), params.get("y", 0.5)
+        
+        if shape_type == "cylinder":
+            r = params.get("radius", 0.1)
+            sdf = torch.sqrt((grid_x - cx)**2 + (grid_y - cy)**2) - r
+        elif shape_type == "square":
+            s = params.get("side", 0.1)
+            sdf = torch.max(torch.abs(grid_x - cx) - s, torch.abs(grid_y - cy) - s)
+        elif shape_type == "airfoil":
+            # NACA 0012 approximation
+            t = 0.12
+            xx = (grid_x - cx) / params.get("scale", 0.2)
+            yy = (grid_y - cy) / params.get("scale", 0.2)
+            # Mask for airfoil shape
+            yt = 5 * t * (0.2969 * torch.sqrt(xx.clamp(min=0)) - 0.1260 * xx - 
+                         0.3516 * xx**2 + 0.2843 * xx**3 - 0.1015 * xx**4)
+            sdf = torch.abs(yy) - yt
+            sdf[xx < 0] = torch.sqrt(xx[xx < 0]**2 + yy[xx < 0]**2)
+            sdf[xx > 1] = torch.sqrt((xx[xx > 1]-1)**2 + yy[xx > 1]**2)
+        else:
+            sdf = torch.ones_like(grid_x)
+            
+        return sdf.unsqueeze(0).unsqueeze(0)  # (1, 1, H, W)
 
 
-def momentum_residual_loss(
-    ux: torch.Tensor,
-    uy: torch.Tensor,
-    p: torch.Tensor,
-    reynolds: float
-) -> torch.Tensor:
+def navier_stokes_residual(ux, uy, p, reynolds, dx=1/127):
     """
-    Navier-Stokes momentum residual for physics-informed training.
+    Compute steady-state Navier-Stokes residuals:
+    Res_u = (u.grad)u + grad(p) - (1/Re)v_laplacian(u)
     """
-    # Placeholder - full implementation requires convective and viscous terms
-    return torch.tensor(0.0)
+    # Gradients
+    du_dx = torch.gradient(ux, dim=-1)[0] / dx
+    du_dy = torch.gradient(uy, dim=-2)[0] / dx
+    dv_dx = torch.gradient(uy, dim=-1)[0] / dx
+    dv_dy = torch.gradient(uy, dim=-2)[0] / dx
+    
+    dp_dx = torch.gradient(p, dim=-1)[0] / dx
+    dp_dy = torch.gradient(p, dim=-2)[0] / dx
+    
+    # Laplacian
+    du2_dx2 = torch.gradient(du_dx, dim=-1)[0] / dx
+    du2_dy2 = torch.gradient(du_dy, dim=-2)[0] / dx
+    dv2_dx2 = torch.gradient(dv_dx, dim=-1)[0] / dx
+    dv2_dy2 = torch.gradient(dv_dy, dim=-2)[0] / dx
+    
+    # Residuals
+    res_u = (ux * du_dx + uy * du_dy) + dp_dx - (1/reynolds) * (du2_dx2 + du2_dy2)
+    res_v = (ux * dv_dx + uy * dv_dy) + dp_dy - (1/reynolds) * (dv2_dx2 + dv2_dy2)
+    res_c = du_dx + dv_dy  # Continuity
+    
+    return torch.mean(res_u**2 + res_v**2 + 10 * res_c**2)
+
+
+class AdaptiveCFDOptimizer:
+    """
+    Perform Real-Time Physics Correction (PINC).
+    Refines neural prediction via differentiable physics.
+    """
+    def __init__(self, model: nn.Module, iterations: int = 5, lr: float = 0.01):
+        self.model = model
+        self.iterations = iterations
+        self.lr = lr
+        
+    def refine(self, x: torch.Tensor, reynolds: float, sdf: torch.Tensor) -> torch.Tensor:
+        # Initial guess from FNO
+        with torch.no_grad():
+            out, _ = self.model(x, enforce_conservation=True)
+        
+        # solid mask (sdf < 0)
+        mask = (sdf < 0).float()
+        
+        # Optimization loop
+        out = out.detach().requires_grad_(True)
+        optimizer = torch.optim.Adam([out], lr=self.lr)
+        
+        for _ in range(self.iterations):
+            optimizer.zero_grad()
+            
+            ux, uy, p = out[:, 0:1], out[:, 1:2], out[:, 2:3]
+            
+            # 1. Physics Loss (N-S Residual)
+            loss_phys = navier_stokes_residual(ux, uy, p, reynolds)
+            
+            # 2. Boundary Condition Loss (No-slip on geometry)
+            loss_bc = torch.mean(mask * (ux**2 + uy**2))
+            
+            total_loss = loss_phys + 100 * loss_bc
+            total_loss.backward()
+            optimizer.step()
+            
+            # Hard enforce zero in solids
+            with torch.no_grad():
+                out[:, 0:2] *= (1 - mask)
+                
+        return out.detach()
+
+
+def create_physics_aware_fno(
+    checkpoint_path: Optional[str] = None,
+    device: str = "cpu",
+    enable_all_features: bool = True
+) -> PhysicsAwareFNO:
+    model = PhysicsAwareFNO(
+        modes=32,
+        width=64,
+        in_channels=4,  # Re, alpha, Mach, SDF
+        out_channels=3,
+        num_layers=4,
+        enable_local_features=enable_all_features,
+        enable_specboost=enable_all_features,
+        enable_conservation=enable_all_features,
+        dropout_rate=0.1
+    )
+    
+    if checkpoint_path and os.path.exists(checkpoint_path):
+        try:
+            state_dict = torch.load(checkpoint_path, map_location=device)
+            
+            # Weight Surgery: Handle channel mismatch in fc0
+            if 'fc0.weight' in state_dict:
+                ckpt_weight = state_dict['fc0.weight']
+                model_weight = model.fno.fc0.weight
+                
+                if ckpt_weight.shape != model_weight.shape:
+                    print(f"⚙ Surgery: Adapting fc0.weight {ckpt_weight.shape} -> {model_weight.shape}")
+                    new_weight = torch.zeros_like(model_weight)
+                    # Channels 0,1,2: Re, alpha, Mach
+                    new_weight[:, :3] = ckpt_weight[:, :3]
+                    # Skip 3 (new SDF channel, keep zeros)
+                    # Channels 4,5: Coordinates (were 3,4 in ckpt)
+                    new_weight[:, 4:] = ckpt_weight[:, 3:]
+                    state_dict['fc0.weight'] = new_weight
+            
+            model.fno.load_state_dict(state_dict, strict=False)
+            print(f"✓ Surgery Successful: {checkpoint_path}")
+        except Exception as e:
+            print(f"⚠ Weight surgery failed: {e}")
+    
+    model = model.to(device)
+    model.eval()
+    return model
 
 
 if __name__ == "__main__":
     # Quick test
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = create_pretrained_fno(device=device)
+    model = create_physics_aware_fno(device=device)
     
     # Test input
-    x = torch.randn(1, 3, 128, 128).to(device)
+    x = torch.randn(1, 4, 128, 128).to(device)
     
     with torch.no_grad():
-        y = model(x)
+        y, _ = model(x)
     
     print(f"Input shape:  {x.shape}")
     print(f"Output shape: {y.shape}")
