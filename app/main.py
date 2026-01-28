@@ -34,7 +34,7 @@ from pydantic import ValidationError
 
 from app.model import (
     PhysicsAwareFNO, create_physics_aware_fno, conservation_correction,
-    GeometryFactory, AdaptiveCFDOptimizer,
+    GeometryFactory, AdaptiveCFDOptimizer, GeometricOptimizer,
     compute_adjoint_sensitivity, surface_force_integration
 )
 from app.schemas import (
@@ -207,16 +207,18 @@ def compute_derived_quantities(ux: np.ndarray, uy: np.ndarray, p: np.ndarray) ->
 async def lifespan(app: FastAPI):
     """Initialize model on startup, cleanup on shutdown"""
     logger.info(f"🚀 Starting SurrAPI on device: {DEVICE}")
+    global state
     
     # Load Flagship Physics-Aware Model
     state.model = create_physics_aware_fno(
-        checkpoint_path=CHECKPOINT_PATH if os.path.exists(CHECKPOINT_PATH) else None,
+        checkpoint_path="checkpoints/physics_fno_g.pt",
         device=DEVICE,
         enable_all_features=True
     )
     
     # Initialize Breakthrough Physics Optimizer
     state.optimizer = AdaptiveCFDOptimizer(state.model, iterations=5)
+    state.geo_optimizer = GeometricOptimizer(state.model, iterations=30)
     
     state.start_time = datetime.now()
     
@@ -368,17 +370,32 @@ async def predict(request: PredictRequest):
     try:
         # Build input tensor from parameters
         resolution = request.resolution
+        
+        # INVERSE DESIGN: Auto-Tune Geometry?
+        current_geo_params = request.geometry_params
+        if request.optimize_geometry and request.geometry_type != "none":
+            t0_opt = time.perf_counter()
+            optimized_params, _ = state.geo_optimizer.optimize(
+                request.geometry_type,
+                request.geometry_params,
+                resolution,
+                request.reynolds
+            )
+            # Update params for final prediction
+            current_geo_params = optimized_params
+            logger.info(f"Geometry Optimized: {request.geometry_params} -> {current_geo_params} in {1000*(time.perf_counter()-t0_opt):.1f}ms")
+            
         bc = torch.zeros(1, 4, resolution, resolution)  # 4 channels: Re, alpha, Mach, SDF
         
-        # Encode parameters as spatial fields
+        # Encode parameters
         bc[0, 0, :, :] = request.reynolds / 10000.0
         bc[0, 1, :, :] = request.angle / 15.0
         bc[0, 2, :, :] = request.mach / 0.6
         
-        # Breakthrough: Generate Geometry SDF
+        # Generate Geometry SDF (Using potentially optimized params)
         sdf = GeometryFactory.generate_sdf(
             request.geometry_type, 
-            request.geometry_params, 
+            current_geo_params, 
             resolution
         ).to(state.device)
         bc[0, 3, :, :] = sdf[0, 0]
@@ -458,7 +475,13 @@ async def predict(request: PredictRequest):
             uy_std=uy_std,
             p_std=p_std,
             sensitivity_map=sensitivity_np.flatten().tolist() if sensitivity_np is not None else None,
+            sensitivity_map=sensitivity_np.flatten().tolist() if sensitivity_np is not None else None,
             enstrophy=derived["enstrophy"],
+            # If optimized, return the new params in a header or log? 
+            # Ideally we update the response schema to return optimized params, but for now we rely on the visual update
+            # or we could stick it in geometry_params if the schema allowed outputting it?
+            # Schema response doesn't have geometry_params field. 
+            # We will rely on the improved drag coefficient to tell the story.
             drag_coefficient=forces["drag_force"] / (0.5 * 1.0**2 * 1e-1 + 1e-8), # Normalized CD
             lift_coefficient=forces["lift_force"] / (0.5 * 1.0**2 * 1e-1 + 1e-8), # Normalized CL
             geometry_mask=mask_np.flatten().tolist(),

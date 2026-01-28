@@ -1005,6 +1005,15 @@
                     </div>
                 </div>
 
+                <div class="control-group" style="margin-top: 15px;">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="autoOptimize">
+                        <span class="checkmark"></span>
+                        <span style="color: #ff6b00; font-weight: 500;">🪄 Auto-Optimize Geometry (Inverse
+                            Design)</span>
+                    </label>
+                </div>
+
                 <button class="predict-btn" id="predictBtn" onclick="runPrediction()">
                     <span class="spinner"></span>
                     <span>🚀 Predict Flow Field</span>
@@ -1348,30 +1357,52 @@ result.<span class="function">save_vtk</span>(<span class="string">"flow_field.v
         // Run prediction
         async function runPrediction() {
             const btn = document.getElementById('predictBtn');
-            btn.classList.add('loading');
-            btn.disabled = true;
+            const reynolds = parseFloat(document.getElementById('reynolds').value);
+            const angle = parseFloat(document.getElementById('angle').value);
+            const mach = parseFloat(document.getElementById('mach').value);
+            const returnUncertainty = document.getElementById('returnUncertainty').checked;
+            const optimizeGeometry = document.getElementById('autoOptimize')?.checked || false;
 
-            const params = {
-                reynolds: parseFloat(document.getElementById('reynolds').value),
-                angle: parseFloat(document.getElementById('angle').value),
-                mach: parseFloat(document.getElementById('mach').value),
-                return_uncertainty: document.getElementById('returnUncertainty').checked,
-                geometry_type: document.getElementById('geometryType').value,
-                geometry_params: {
-                    x: parseFloat(document.getElementById('geomX').value),
-                    y: 0.5,
-                    radius: 0.05,
-                    scale: 0.2,
-                    side: 0.05
-                }
-            };
+            const geometryType = document.getElementById('geometryType').value;
+            const geomX = parseFloat(document.getElementById('geomX').value);
+
+            const predictBtn = document.getElementById('predictBtn');
+            const spinner = predictBtn.querySelector('.spinner');
+            const btnText = predictBtn.querySelector('span:last-child');
+
+            predictBtn.disabled = true;
+            spinner.style.display = 'inline-block';
+            if (optimizeGeometry) {
+                btnText.innerText = '✨ Optimizing Design...';
+            } else {
+                btnText.innerText = 'Running Physics...';
+            }
+
+            const t0 = performance.now();
 
             try {
-                const t0 = performance.now();
-                const response = await fetch(`${API_URL}/predict`, {
+                const response = await fetch('/predict', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(params)
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        reynolds: reynolds,
+                        angle: angle,
+                        mach: mach,
+                        flow_type: "navier_stokes",
+                        resolution: 128,
+                        return_uncertainty: returnUncertainty,
+                        geometry_type: geometryType,
+                        geometry_params: {
+                            x: geomX,
+                            y: 0.5,
+                            scale: geometryType === 'airfoil' ? 1.0 : 0.2, // Default scale
+                            radius: 0.05,
+                            side: 0.05
+                        },
+                        optimize_geometry: optimizeGeometry
+                    }),
                 });
 
                 if (!response.ok) {

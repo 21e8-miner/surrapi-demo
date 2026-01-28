@@ -112,6 +112,11 @@ class PredictRequest(BaseModel):
         description="Parameters for the selected geometry (x, y, scale, etc.)."
     )
     
+    optimize_geometry: bool = Field(
+        default=False,
+        description="Auto-Tune geometry parameters inversely to minimize Drag (Experimental)."
+    )
+    
     # Validators for physics-based input checking
     @validator('reynolds')
     def validate_reynolds(cls, v):

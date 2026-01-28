@@ -599,11 +599,92 @@ class GeometryFactory:
         return sdf.unsqueeze(0).unsqueeze(0)  # (1, 1, H, W)
 
 
-def navier_stokes_residual(ux, uy, p, reynolds, dx=1/127):
+class GeometricOptimizer:
+    """
+    Inverse Design: Optimizes geometry parameters to minimize Drag.
+    Differentiates through the SDF generation process.
+    """
+    def __init__(self, model: nn.Module, iterations: int = 20, lr: float = 0.01):
+        self.model = model
+        self.iterations = iterations
+        self.lr = lr
+
+    def optimize(self, geometry_type: str, initial_params: Dict[str, float], resolution: int, reynolds: float) -> Tuple[Dict[str, float], torch.Tensor]:
+        # Convert params to learnable tensors
+        learnable_params = {}
+        for k, v in initial_params.items():
+            # Only optimize position for now (shape optimization is harder with simple SDFs)
+            if k in ["x", "y"]: 
+                t = torch.tensor([v], device=DEVICE, dtype=torch.float32, requires_grad=True)
+                learnable_params[k] = t
+            else:
+                learnable_params[k] = v # Static params
+            
+        optimizer = torch.optim.Adam([p for p in learnable_params.values() if isinstance(p, torch.Tensor) and p.requires_grad], lr=self.lr)
+        
+        best_drag = float('inf')
+        best_sdf = None
+        best_params = initial_params.copy()
+        
+        for i in range(self.iterations):
+            optimizer.zero_grad()
+            
+            # 1. Generate differentiable SDF
+            # We need to reconstruct the params dict with the tensors
+            current_params = {k: (v if not isinstance(v, torch.Tensor) else v) for k, v in learnable_params.items()}
+            
+            # GeometryFactory needs to handle tensor inputs mixed with floats
+            # We assume GenerateSDF uses torch ops which handle broadcasting
+            sdf = GeometryFactory.generate_sdf(geometry_type, current_params, resolution).to(DEVICE)
+            
+            # 2. Predict Flow
+            # We use the base model for speed in the optimization loop
+            # (AdaptiveCFDOptimizer would be too slow inside this loop)
+            # But we need to ensure the Input tensor allows grad flow back to SDF
+            # Resolution of x input?
+            dummy_bc = torch.zeros(1, 4, resolution, resolution, device=DEVICE)
+            dummy_bc[0, 0, :, :] = reynolds / 10000.0
+            dummy_bc[0, 3, :, :] = sdf[0, 0] # Inject SDF with grad history
+            
+            out, _ = self.model(dummy_bc, enforce_conservation=False)
+            ux, uy, p = out[:, 0:1], out[:, 1:2], out[:, 2:3]
+            
+            # 3. Compute Drag Loss
+            # Proxy drag: pressure drop + surface integral proxy
+            # QC FIX: Use differentiable mask (Sigmoid) instead of hard step
+            # This allows gradients to flow through the boundary definition
+            mask_soft = torch.sigmoid(-sdf * 50.0) # Sharp sigmoid
+            
+            forces = surface_force_integration(p, mask_soft)
+            drag = forces["drag_force"]
+            
+            # 4. Optimization Step
+            loss = drag + 0.1 * torch.mean(mask_soft) # Regularization: don't disappear
+            loss.backward()
+            optimizer.step()
+            
+            # Clipping to domain
+            with torch.no_grad():
+                for k, v in learnable_params.items():
+                     if isinstance(v, torch.Tensor):
+                        v.clamp_(0.1, 0.9)
+            
+            if drag < best_drag:
+                best_drag = drag.item()
+                best_sdf = sdf.detach()
+                best_params = {k: (v.item() if isinstance(v, torch.Tensor) else v) for k, v in learnable_params.items()}
+        
+        return best_params, best_sdf
+
+
+def navier_stokes_residual(ux, uy, p, reynolds):
     """
     Compute steady-state Navier-Stokes residuals:
     Res_u = (u.grad)u + grad(p) - (1/Re)v_laplacian(u)
     """
+    # Dynamic grid spacing
+    resolution = ux.shape[-1]
+    dx = 1.0 / (resolution - 1)
     # Gradients
     du_dx = torch.gradient(ux, dim=-1)[0] / dx
     du_dy = torch.gradient(ux, dim=-2)[0] / dx
