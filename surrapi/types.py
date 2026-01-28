@@ -49,6 +49,7 @@ class PredictRequest:
         resolution: Output grid resolution (64-256)
         inlet_velocity: Optional inlet velocity (m/s)
         enforce_conservation: Apply conservation correction for ∇·u = 0
+        return_uncertainty: Get uncertainty estimates via MC dropout
     """
     reynolds: float = 2000.0
     angle: float = 0.0
@@ -56,6 +57,7 @@ class PredictRequest:
     resolution: int = 128
     inlet_velocity: Optional[float] = None
     enforce_conservation: bool = False
+    return_uncertainty: bool = False
     
     def to_dict(self) -> dict:
         """Convert to API request payload"""
@@ -65,6 +67,7 @@ class PredictRequest:
             "mach": self.mach,
             "resolution": self.resolution,
             "enforce_conservation": self.enforce_conservation,
+            "return_uncertainty": self.return_uncertainty,
         }
         if self.inlet_velocity is not None:
             d["inlet_velocity"] = self.inlet_velocity
@@ -100,7 +103,7 @@ class PredictResponse:
     velocity_magnitude: Optional[FlowField] = None
     physics_score: Optional[float] = None
     
-    # Uncertainty quantification (future)
+    # Uncertainty quantification (Monte Carlo dropout)
     ux_std: Optional[FlowField] = None
     uy_std: Optional[FlowField] = None
     p_std: Optional[FlowField] = None
@@ -120,13 +123,21 @@ class PredictResponse:
             physics_score=data.get("physics_score"),
         )
         
-        # Parse optional fields
+        # Parse optional derived fields
         if data.get("vorticity"):
             response.vorticity = FlowField(data["vorticity"], resolution)
         if data.get("divergence"):
             response.divergence = FlowField(data["divergence"], resolution)
         if data.get("velocity_magnitude"):
             response.velocity_magnitude = FlowField(data["velocity_magnitude"], resolution)
+        
+        # Parse uncertainty fields
+        if data.get("ux_std"):
+            response.ux_std = FlowField(data["ux_std"], resolution)
+        if data.get("uy_std"):
+            response.uy_std = FlowField(data["uy_std"], resolution)
+        if data.get("p_std"):
+            response.p_std = FlowField(data["p_std"], resolution)
         
         return response
     
@@ -149,3 +160,34 @@ class PredictResponse:
         if self.physics_score is None:
             return True  # No score = assume valid
         return self.physics_score >= threshold
+    
+    def has_uncertainty(self) -> bool:
+        """Check if uncertainty quantification was computed"""
+        return self.ux_std is not None
+    
+    def mean_uncertainty(self) -> float:
+        """Get average uncertainty across all fields"""
+        if not self.has_uncertainty():
+            return 0.0
+        avg = (self.ux_std.mean() + self.uy_std.mean() + self.p_std.mean()) / 3
+        return avg
+    
+    def high_uncertainty_regions(self, threshold: float = 0.1) -> np.ndarray:
+        """
+        Find regions with high prediction uncertainty.
+        
+        Args:
+            threshold: Uncertainty threshold (default 0.1 = 10%)
+            
+        Returns:
+            Boolean mask of high-uncertainty cells
+        """
+        if not self.has_uncertainty():
+            return np.zeros((self.resolution, self.resolution), dtype=bool)
+        
+        combined_std = (
+            self.ux_std.to_numpy() + 
+            self.uy_std.to_numpy() + 
+            self.p_std.to_numpy()
+        ) / 3
+        return combined_std > threshold

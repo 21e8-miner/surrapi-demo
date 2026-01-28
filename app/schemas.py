@@ -88,6 +88,11 @@ class PredictRequest(BaseModel):
         description="Apply adaptive correction to enforce mass conservation (∇·u = 0). Increases physics_score but adds ~50ms latency."
     )
     
+    return_uncertainty: bool = Field(
+        default=False,
+        description="Return uncertainty estimates via Monte Carlo dropout. Adds ~200ms latency (10 samples)."
+    )
+    
     class Config:
         json_schema_extra = {
             "example": {
@@ -178,6 +183,20 @@ class PredictResponse(BaseModel):
     physics_score: Optional[float] = Field(
         default=None,
         description="Confidence score based on mass conservation (0.0 to 1.0)."
+    )
+    
+    # Uncertainty quantification (Monte Carlo dropout)
+    ux_std: Optional[List[float]] = Field(
+        default=None,
+        description="Uncertainty (std dev) for x-velocity field."
+    )
+    uy_std: Optional[List[float]] = Field(
+        default=None,
+        description="Uncertainty (std dev) for y-velocity field."
+    )
+    p_std: Optional[List[float]] = Field(
+        default=None,
+        description="Uncertainty (std dev) for pressure field."
     )
     
     # Metadata

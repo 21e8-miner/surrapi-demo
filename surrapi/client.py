@@ -114,6 +114,7 @@ class Client:
         resolution: int = 128,
         inlet_velocity: Optional[float] = None,
         enforce_conservation: bool = False,
+        return_uncertainty: bool = False,
         validate_physics: bool = True
     ) -> PredictResponse:
         """
@@ -126,6 +127,7 @@ class Client:
             resolution: Output grid resolution (64-256)
             inlet_velocity: Optional inlet velocity
             enforce_conservation: Apply Helmholtz projection for ∇·u = 0 (arXiv 2025)
+            return_uncertainty: Get uncertainty via MC dropout (arXiv 2025)
             validate_physics: Warn if physics score is low
         
         Returns:
@@ -146,7 +148,8 @@ class Client:
             mach=mach,
             resolution=resolution,
             inlet_velocity=inlet_velocity,
-            enforce_conservation=enforce_conservation
+            enforce_conservation=enforce_conservation,
+            return_uncertainty=return_uncertainty
         )
         
         response = self._session.post(
