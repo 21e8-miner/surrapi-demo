@@ -84,7 +84,7 @@ class PredictRequest(BaseModel):
     )
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "reynolds": 5000,
                 "angle": 5.0,
@@ -187,7 +187,7 @@ class PredictResponse(BaseModel):
     )
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "vtk": "PHZ0a1...",
                 "ux": [0.1, 0.2, 0.3],

@@ -248,12 +248,14 @@ static_path = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_path):
     app.mount("/static", StaticFiles(directory=static_path), name="static")
 
-# Register billing routes
+# Register billing routes and middleware
 try:
-    from app.billing import register_billing_routes
+    from app.billing import register_billing_routes, BillingMiddleware
     register_billing_routes(app)
-except ImportError:
-    logger.warning("Billing module not available - running without billing")
+    app.add_middleware(BillingMiddleware)
+    logger.info("Billing middleware enabled - usage tracking active")
+except ImportError as e:
+    logger.warning(f"Billing module not available - running without billing: {e}")
 
 # Register metrics endpoint
 if MIDDLEWARE_AVAILABLE:
