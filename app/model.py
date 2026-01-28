@@ -751,9 +751,42 @@ def navier_stokes_residual(ux, uy, p, reynolds):
     dv2_dx2 = torch.gradient(dv_dx, dim=-1)[0] / dx
     dv2_dy2 = torch.gradient(dv_dy, dim=-2)[0] / dx
     
+    # DIFFUSION with Turbulence Modeling (Smagorinsky-Lilly / RANS Proxy)
+    # Effective Viscosity: nu_eff = nu_laminar + nu_turbulent
+    # nu_turbulent = (Cs * grid_scale)^2 * |StrainRate|
+    
+    # 1. Strain Rate Tensor Magnitude: |S| = sqrt(2*Sij*Sij)
+    # S_xx = du_dx, S_yy = dv_dy, S_xy = 0.5 * (du_dy + dv_dx)
+    S_xx = du_dx
+    S_yy = dv_dy
+    S_xy = 0.5 * (du_dy + dv_dx)
+    strain_mag = torch.sqrt(2 * (S_xx**2 + S_yy**2 + 2 * S_xy**2))
+    
+    # 2. Eddy Viscosity
+    # Cs (Smagorinsky constant) approx 0.1 - 0.2
+    # Only apply if Reynolds > 2000 (Transition to turbulence)
+    nu_lam = 1.0 / reynolds
+    
+    if isinstance(reynolds, torch.Tensor):
+        is_turbulent = (reynolds > 2000).float().view(-1, 1, 1)
+    elif isinstance(reynolds, (float, int)):
+        is_turbulent = 1.0 if reynolds > 2000 else 0.0
+        
+    # Mixing length: proportional to grid size (Implicit LES)
+    l_mix = 0.15 * dx
+    nu_turb = (l_mix**2) * strain_mag * is_turbulent
+    
+    nu_eff = nu_lam + nu_turb
+    
+    # 3. Diffusion Term: ∇·(nu_eff * ∇u) 
+    # Simplified: nu_eff * Laplacian(u) + grad(nu_eff)·grad(u)
+    # For speed, we approximate primarily as enhanced viscosity coefficient
+    diff_u = nu_eff * (du2_dx2 + du2_dy2)
+    diff_v = nu_eff * (dv2_dx2 + dv2_dy2)
+
     # Residuals
-    res_u = (ux * du_dx + uy * du_dy) + dp_dx - (1/reynolds) * (du2_dx2 + du2_dy2)
-    res_v = (ux * dv_dx + uy * dv_dy) + dp_dy - (1/reynolds) * (dv2_dx2 + dv2_dy2)
+    res_u = (ux * du_dx + uy * du_dy) + dp_dx - diff_u
+    res_v = (ux * dv_dx + uy * dv_dy) + dp_dy - diff_v
     res_c = du_dx + dv_dy  # Continuity
     
     return torch.mean(res_u**2 + res_v**2 + 10 * res_c**2)
