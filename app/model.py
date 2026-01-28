@@ -783,7 +783,20 @@ class AdaptiveCFDOptimizer:
         out = out.detach().requires_grad_(True)
         optimizer = torch.optim.Adam([out], lr=self.lr)
         
-        for _ in range(self.iterations):
+        # PROACTIVE HALLUCINATION CHECK
+        # Neural nets can hallucinate 'plausible but wrong' flows (e.g. valid-looking eddies in wrong places)
+        # We detect high initial residuals as a sign of hallucination.
+        with torch.no_grad():
+            initial_res_loss = navier_stokes_residual(out[:, 0:1], out[:, 1:2], out[:, 2:3], reynolds)
+        
+        # Adaptive Iterations: If hallucinating (high physics error), increase correction steps
+        current_iterations = self.iterations
+        if initial_res_loss > 0.05: # Threshold determined empirically
+            current_iterations *= 3 # Force physics compliance
+            # Also increase LR to escape local minima
+            optimizer.param_groups[0]['lr'] = self.lr * 2.0
+            
+        for _ in range(current_iterations):
             optimizer.zero_grad()
             
             ux, uy, p = out[:, 0:1], out[:, 1:2], out[:, 2:3]
