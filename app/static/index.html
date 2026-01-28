@@ -484,6 +484,48 @@
             font-size: 0.95rem;
         }
 
+        /* Competitor Comparison Table */
+        .comparison-section {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+            background: var(--dark-3);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            padding: 1rem;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .comparison-table th {
+            background: var(--dark-1);
+            color: var(--text-1);
+            font-weight: 600;
+        }
+
+        .comparison-table th:nth-child(2) {
+            background: linear-gradient(180deg, var(--primary) 0%, var(--secondary) 100%);
+            color: var(--dark-1);
+        }
+
+        .comparison-table td.highlight {
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .comparison-table tbody tr:hover {
+            background: rgba(0, 212, 255, 0.05);
+        }
+
         /* ============================================================
            Pricing Section
         ============================================================ */
@@ -993,6 +1035,66 @@
                 </p>
             </div>
         </div>
+
+        <!-- Competitor Comparison Table -->
+        <div class="comparison-section">
+            <h3 style="text-align: center; margin: 3rem 0 1.5rem; font-size: 1.5rem;">How We Compare</h3>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>SurrAPI</th>
+                        <th>SimScale</th>
+                        <th>Luminary Cloud</th>
+                        <th>PhysicsX</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Inference Time</td>
+                        <td class="highlight">~300ms</td>
+                        <td>Hours</td>
+                        <td>Minutes</td>
+                        <td>~1s</td>
+                    </tr>
+                    <tr>
+                        <td>Pricing</td>
+                        <td class="highlight">$0.25/call</td>
+                        <td>$3K+/yr</td>
+                        <td>$5/credit</td>
+                        <td>Enterprise</td>
+                    </tr>
+                    <tr>
+                        <td>Free Tier</td>
+                        <td class="highlight">1,000/mo</td>
+                        <td>Limited</td>
+                        <td>Trial</td>
+                        <td>No</td>
+                    </tr>
+                    <tr>
+                        <td>Python SDK</td>
+                        <td class="highlight">✓</td>
+                        <td>✓</td>
+                        <td>✓</td>
+                        <td>✓</td>
+                    </tr>
+                    <tr>
+                        <td>Physics Validation</td>
+                        <td class="highlight">✓ Real-time</td>
+                        <td>Post-hoc</td>
+                        <td>Post-hoc</td>
+                        <td>✓</td>
+                    </tr>
+                    <tr>
+                        <td>On-Prem Option</td>
+                        <td class="highlight">✓ Docker</td>
+                        <td>No</td>
+                        <td>No</td>
+                        <td>✓</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </section>
 
     <!-- Code Example Section -->
@@ -1008,30 +1110,31 @@
                 <span class="code-dot"></span>
             </div>
             <div class="code-content">
-                <pre><span class="keyword">import</span> requests
-<span class="keyword">import</span> numpy <span class="keyword">as</span> np
+                <pre><span class="comment"># pip install surrapi</span>
+<span class="keyword">from</span> surrapi <span class="keyword">import</span> Client
 
-<span class="comment"># Define flow parameters</span>
-params = {
-    <span class="string">"reynolds"</span>: <span class="number">5000</span>,
-    <span class="string">"angle"</span>: <span class="number">5.0</span>,
-    <span class="string">"mach"</span>: <span class="number">0.3</span>
-}
+<span class="comment"># Initialize with your API key</span>
+client = Client(api_key=<span class="string">"sk_..."</span>)
 
-<span class="comment"># Get instant prediction</span>
-response = requests.<span class="function">post</span>(
-    <span class="string">"https://api.surrapi.io/predict"</span>,
-    json=params,
-    headers={<span class="string">"Authorization"</span>: <span class="string">"Bearer YOUR_API_KEY"</span>}
+<span class="comment"># Get instant CFD prediction</span>
+result = client.<span class="function">predict</span>(
+    reynolds=<span class="number">5000</span>,
+    angle=<span class="number">5.0</span>,
+    mach=<span class="number">0.3</span>
 )
 
-<span class="comment"># Parse flow fields (128x128 grids)</span>
-data = response.<span class="function">json</span>()
-velocity_x = np.<span class="function">array</span>(data[<span class="string">"ux"</span>]).<span class="function">reshape</span>(<span class="number">128</span>, <span class="number">128</span>)
-velocity_y = np.<span class="function">array</span>(data[<span class="string">"uy"</span>]).<span class="function">reshape</span>(<span class="number">128</span>, <span class="number">128</span>)
-pressure = np.<span class="function">array</span>(data[<span class="string">"p"</span>]).<span class="function">reshape</span>(<span class="number">128</span>, <span class="number">128</span>)
+<span class="comment"># Access flow fields as numpy arrays</span>
+velocity = result.ux.<span class="function">to_numpy</span>()   <span class="comment"># 128x128</span>
+pressure = result.p.<span class="function">to_numpy</span>()
 
-<span class="function">print</span>(<span class="string">f"Prediction in {data['inference_time_ms']:.0f}ms"</span>)</pre>
+<span class="comment"># Check physics confidence</span>
+<span class="keyword">if</span> result.physics_score > <span class="number">0.9</span>:
+    <span class="function">print</span>(<span class="string">f"✓ Valid prediction in {result.inference_time_ms:.0f}ms"</span>)
+<span class="keyword">else</span>:
+    <span class="function">print</span>(<span class="string">"⚠ Low physics confidence - review results"</span>)
+
+<span class="comment"># Save VTK for ParaView</span>
+result.<span class="function">save_vtk</span>(<span class="string">"flow_field.vti"</span>)</pre>
             </div>
         </div>
     </section>

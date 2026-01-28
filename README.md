@@ -44,6 +44,36 @@ Visit:
 - **API Docs**: http://localhost:8000/docs
 - **Health Check**: http://localhost:8000/health
 
+### Python SDK
+
+The easiest way to use SurrAPI is via our Python SDK:
+
+```bash
+pip install surrapi
+```
+
+```python
+from surrapi import Client
+
+client = Client(api_key="sk_...")
+
+# Get instant CFD prediction
+result = client.predict(reynolds=5000, angle=5.0, mach=0.3)
+
+# Access flow fields as numpy arrays
+velocity = result.ux.to_numpy()  # 128x128
+pressure = result.p.to_numpy()
+
+# Check physics confidence (mass conservation)
+if result.physics_score > 0.9:
+    print(f"✓ Valid prediction in {result.inference_time_ms:.0f}ms")
+
+# Batch predictions for parameter sweeps
+from surrapi import PredictRequest
+requests = [PredictRequest(reynolds=r) for r in range(1000, 10001, 1000)]
+results = client.predict_batch(requests)
+```
+
 ### Docker Deployment
 
 ```bash
