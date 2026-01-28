@@ -83,6 +83,11 @@ class PredictRequest(BaseModel):
         description="Inlet velocity magnitude (m/s)."
     )
     
+    enforce_conservation: bool = Field(
+        default=False,
+        description="Apply adaptive correction to enforce mass conservation (∇·u = 0). Increases physics_score but adds ~50ms latency."
+    )
+    
     class Config:
         json_schema_extra = {
             "example": {

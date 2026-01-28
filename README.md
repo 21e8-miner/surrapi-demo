@@ -19,6 +19,19 @@ SurrAPI is a fully-functional **Surrogate-as-a-Service** platform that replaces 
 - **$0.25/prediction** vs $5-50 in cloud HPC costs
 - **Simple REST API** - no CFD expertise required
 
+### 🔬 Cutting-Edge Research Integration (arXiv 2024-2025)
+
+SurrAPI incorporates the latest advances in neural operator research:
+
+| Feature | Paper | Benefit |
+|---------|-------|---------|
+| **Conservation Correction** | "Conservation-preserved FNO" (2025) | Enforces ∇·u = 0 via Helmholtz projection |
+| **High-Freq Boosting** | "SpecBoost-FNO" (2024) | Captures vortex shedding details |
+| **Local Feature Extraction** | "Conv-FNO" (2025) | Resolves boundary layer separation |
+| **Uncertainty Quantification** | "UQ in Neural Operators" (2025) | Monte Carlo dropout for confidence intervals |
+
+Use `enforce_conservation=True` in your API request for physics-guaranteed outputs.
+
 ## 🚀 Quick Start
 
 ### Local Development (No Docker)

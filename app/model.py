@@ -248,6 +248,135 @@ def create_pretrained_fno(
 
 
 # -------------------------------------------------------------------
+# Cutting-Edge Enhancements (arXiv 2024-2025)
+# -------------------------------------------------------------------
+
+class LocalFeatureExtractor(nn.Module):
+    """
+    CNN pre-extractor for local spatial features (Conv-FNO).
+    Reference: "Enhancing Fourier Neural Operators with Local Spatial Features" (arXiv 2025)
+    
+    FNOs excel at global patterns but miss local boundary layer details.
+    This module captures high-gradient regions like separation bubbles.
+    """
+    
+    def __init__(self, in_channels: int, out_channels: int):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels, 32, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(64, out_channels, kernel_size=1)
+        self.norm = nn.BatchNorm2d(64)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = F.gelu(self.conv1(x))
+        x = F.gelu(self.norm(self.conv2(x)))
+        return self.conv3(x)
+
+
+class HighFrequencyBooster(nn.Module):
+    """
+    Spectral boosting for high-frequency details (SpecBoost-FNO).
+    Reference: "Toward a Better Understanding of FNOs from a Spectral Perspective" (arXiv 2024)
+    
+    Standard FNOs underweight high-frequency modes. This learnable
+    amplification layer boosts fine-scale features like vortex shedding.
+    """
+    
+    def __init__(self, modes: int):
+        super().__init__()
+        # Learnable frequency-dependent amplification
+        self.amp_low = nn.Parameter(torch.ones(modes))
+        self.amp_high = nn.Parameter(torch.ones(modes) * 0.5)  # Start conservative
+    
+    def forward(self, x_ft: torch.Tensor, modes: int) -> torch.Tensor:
+        """Apply frequency-dependent amplification in Fourier space"""
+        # Boost low frequencies (large scale)
+        x_ft[:, :, :modes, :modes] *= self.amp_low.view(1, 1, -1, 1)
+        # Boost high frequencies (fine details)
+        x_ft[:, :, -modes:, :modes] *= self.amp_high.view(1, 1, -1, 1)
+        return x_ft
+
+
+def conservation_correction(
+    ux: torch.Tensor, 
+    uy: torch.Tensor,
+    iterations: int = 5
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Adaptive correction for mass conservation (∇·u = 0).
+    Reference: "Conservation-preserved FNO through Adaptive Correction" (arXiv 2025)
+    
+    Projects velocity field onto divergence-free manifold using
+    iterative Helmholtz decomposition.
+    """
+    for _ in range(iterations):
+        # Compute divergence
+        dux_dx = torch.gradient(ux, dim=-1)[0]
+        duy_dy = torch.gradient(uy, dim=-2)[0]
+        div = dux_dx + duy_dy
+        
+        # Solve Poisson for correction potential: ∇²φ = ∇·u
+        # Approximate with spectral method
+        div_fft = torch.fft.fft2(div)
+        
+        # Frequency grid
+        nx, ny = div.shape[-2:]
+        kx = torch.fft.fftfreq(nx, device=div.device).view(-1, 1)
+        ky = torch.fft.fftfreq(ny, device=div.device).view(1, -1)
+        k2 = kx**2 + ky**2
+        k2[0, 0] = 1  # Avoid division by zero
+        
+        # Potential field
+        phi_fft = div_fft / (-4 * np.pi**2 * k2)
+        phi_fft[..., 0, 0] = 0  # Zero mean
+        phi = torch.fft.ifft2(phi_fft).real
+        
+        # Correct velocities: u_corrected = u - ∇φ
+        phi_dx = torch.gradient(phi, dim=-1)[0]
+        phi_dy = torch.gradient(phi, dim=-2)[0]
+        
+        ux = ux - phi_dx
+        uy = uy - phi_dy
+    
+    return ux, uy
+
+
+class UncertaintyWrapper(nn.Module):
+    """
+    Monte Carlo Dropout for uncertainty quantification.
+    Reference: "Uncertainty Quantification in Neural Operators" (arXiv 2025)
+    
+    Enables ensemble-like predictions by running multiple forward
+    passes with dropout enabled. Returns mean and std for each field.
+    """
+    
+    def __init__(self, model: nn.Module, dropout_rate: float = 0.1):
+        super().__init__()
+        self.model = model
+        self.dropout = nn.Dropout(dropout_rate)
+        
+    def forward(self, x: torch.Tensor, n_samples: int = 10) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Returns:
+            mean: Mean prediction across samples
+            std: Standard deviation (uncertainty) across samples
+        """
+        self.train()  # Enable dropout
+        
+        predictions = []
+        for _ in range(n_samples):
+            with torch.no_grad():
+                pred = self.model(self.dropout(x))
+                predictions.append(pred)
+        
+        predictions = torch.stack(predictions)
+        mean = predictions.mean(dim=0)
+        std = predictions.std(dim=0)
+        
+        return mean, std
+
+
+# -------------------------------------------------------------------
 # Physics-aware loss functions (for training / fine-tuning)
 # -------------------------------------------------------------------
 

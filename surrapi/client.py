@@ -113,6 +113,7 @@ class Client:
         mach: float = 0.2,
         resolution: int = 128,
         inlet_velocity: Optional[float] = None,
+        enforce_conservation: bool = False,
         validate_physics: bool = True
     ) -> PredictResponse:
         """
@@ -124,6 +125,7 @@ class Client:
             mach: Mach number (0.05-0.6)
             resolution: Output grid resolution (64-256)
             inlet_velocity: Optional inlet velocity
+            enforce_conservation: Apply Helmholtz projection for ∇·u = 0 (arXiv 2025)
             validate_physics: Warn if physics score is low
         
         Returns:
@@ -143,7 +145,8 @@ class Client:
             angle=angle,
             mach=mach,
             resolution=resolution,
-            inlet_velocity=inlet_velocity
+            inlet_velocity=inlet_velocity,
+            enforce_conservation=enforce_conservation
         )
         
         response = self._session.post(

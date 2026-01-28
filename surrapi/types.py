@@ -48,12 +48,14 @@ class PredictRequest:
         mach: Mach number (0.05-0.6)
         resolution: Output grid resolution (64-256)
         inlet_velocity: Optional inlet velocity (m/s)
+        enforce_conservation: Apply conservation correction for ∇·u = 0
     """
     reynolds: float = 2000.0
     angle: float = 0.0
     mach: float = 0.2
     resolution: int = 128
     inlet_velocity: Optional[float] = None
+    enforce_conservation: bool = False
     
     def to_dict(self) -> dict:
         """Convert to API request payload"""
@@ -62,6 +64,7 @@ class PredictRequest:
             "angle": self.angle,
             "mach": self.mach,
             "resolution": self.resolution,
+            "enforce_conservation": self.enforce_conservation,
         }
         if self.inlet_velocity is not None:
             d["inlet_velocity"] = self.inlet_velocity
