@@ -233,6 +233,20 @@ class PredictResponse(BaseModel):
         description="Uncertainty (std dev) for pressure field."
     )
     
+    # Engineering Metrics
+    enstrophy: Optional[float] = Field(
+        default=None,
+        description="Total enstrophy (mean square vorticity)."
+    )
+    drag_coefficient: Optional[float] = Field(
+        default=None,
+        description="Estimates drag coefficient (normalized pressure force)."
+    )
+    lift_coefficient: Optional[float] = Field(
+        default=None,
+        description="Estimated lift coefficient (transverse pressure force)."
+    )
+    
     # Metadata
     resolution: int = Field(
         default=128,
@@ -310,6 +324,7 @@ class HealthResponse(BaseModel):
     model_loaded: bool = Field(..., description="Whether model weights are loaded.")
     version: str = Field(default="0.1.0")
     uptime_seconds: float = Field(..., description="Server uptime.")
+    model_architecture: str = Field(default="FNO-2D", description="Details of the running neural operator.")
     
     # Extended metrics
     checks: Optional[Dict[str, Any]] = Field(

@@ -1,17 +1,22 @@
 """
-Fourier Neural Operator (FNO) 2D Implementation
-Pre-trained on The Well physics simulation dataset (15TB)
-Optimized for surrogate CFD predictions
+Physics-Aware Fourier Neural Operator (FNO) 2D Implementation
+Optimized for production surrogate CFD predictions.
 
-Based on: "Fourier Neural Operator for Parametric Partial Differential Equations"
-Li et al., ICLR 2021
+Incorporates:
+- Conv-FNO Local Features
+- High-Frequency Spectral Boosting
+- Helmholtz Conservation Correction
+- MC Dropout Uncertainty Quantification
+
+Trained on synthetic OpenFOAM simulation data.
 """
 
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Any, Dict
 
 
 class SpectralConv2d(nn.Module):

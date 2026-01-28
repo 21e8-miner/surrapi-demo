@@ -969,6 +969,16 @@
                     <input type="range" id="mach" min="0.05" max="0.6" value="0.2" step="0.01">
                 </div>
 
+                <div class="control-group">
+                    <div class="control-label"
+                        style="display: flex; align-items: center; justify-content: space-between;">
+                        <span>Quantify Uncertainty</span>
+                        <input type="checkbox" id="returnUncertainty" style="width: auto; margin-right: 0;">
+                    </div>
+                    <p style="font-size: 11px; color: #888; margin-top: 4px;">Runs 10x MC Dropout samples. Adds ~500ms.
+                    </p>
+                </div>
+
                 <button class="predict-btn" id="predictBtn" onclick="runPrediction()">
                     <span class="spinner"></span>
                     <span>🚀 Predict Flow Field</span>
@@ -992,6 +1002,8 @@
                     <button class="field-btn" onclick="showField('divergence')" id="btn-divergence">Divergence</button>
                     <button class="field-btn" onclick="showField('velocity_magnitude')"
                         id="btn-velocity_magnitude">Speed</button>
+                    <button class="field-btn" onclick="showField('ux_std')" id="btn-ux_std"
+                        style="display: none;">Uncertainty</button>
                 </div>
             </div>
         </div>
@@ -1309,7 +1321,8 @@ result.<span class="function">save_vtk</span>(<span class="string">"flow_field.v
             const params = {
                 reynolds: parseFloat(document.getElementById('reynolds').value),
                 angle: parseFloat(document.getElementById('angle').value),
-                mach: parseFloat(document.getElementById('mach').value)
+                mach: parseFloat(document.getElementById('mach').value),
+                return_uncertainty: document.getElementById('returnUncertainty').checked
             };
 
             try {
@@ -1342,6 +1355,15 @@ result.<span class="function">save_vtk</span>(<span class="string">"flow_field.v
                     if (score > 95) scoreEl.style.color = '#22c55e';
                     else if (score > 80) scoreEl.style.color = '#f59e0b';
                     else scoreEl.style.color = '#ef4444';
+                }
+
+                // Show uncertainty button if data available
+                const uqBtn = document.getElementById('btn-ux_std');
+                if (currentData.ux_std) {
+                    uqBtn.style.display = 'inline-block';
+                } else {
+                    uqBtn.style.display = 'none';
+                    if (currentField === 'ux_std') currentField = 'ux';
                 }
 
                 showField(currentField);
@@ -1395,6 +1417,9 @@ result.<span class="function">save_vtk</span>(<span class="string">"flow_field.v
                 title = 'Velocity X (u_x)';
             } else if (field === 'uy') {
                 title = 'Velocity Y (u_y)';
+            } else if (field === 'ux_std') {
+                colorscale = 'Hot';
+                title = 'Prediction Uncertainty (σ)';
             }
 
             let update = {
