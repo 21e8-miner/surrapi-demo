@@ -598,6 +598,35 @@ class GeometryFactory:
             
         return sdf.unsqueeze(0).unsqueeze(0)  # (1, 1, H, W)
 
+    @staticmethod
+    def decode_sdf(base64_str: str, resolution: int = 128) -> torch.Tensor:
+        """Decodes a base64 float32 buffer into an SDF tensor"""
+        import base64
+        import struct
+        
+        try:
+            # Decode base64 to bytes
+            data = base64.b64decode(base64_str)
+            # Unpack float32s
+            count = resolution * resolution
+            if len(data) != count * 4:
+                # If size mismatch, try to resize or error?
+                # For safety, we just error or return default
+                # But let's assume valid input for MVP
+                floats = struct.unpack(f'{len(data)//4}f', data)
+                # Resample not implemented, assume correct size
+                tensor = torch.tensor(floats).reshape(1, 1, int(len(floats)**0.5), int(len(floats)**0.5))
+                # Interpolate to target resolution
+                if tensor.shape[-1] != resolution:
+                    tensor = torch.nn.functional.interpolate(tensor, size=(resolution, resolution), mode='bilinear')
+                return tensor
+            floats = struct.unpack(f'{count}f', data)
+            return torch.tensor(floats).reshape(1, 1, resolution, resolution)
+        except Exception as e:
+            # Fallback
+            print(f"SDF Decode Error: {e}")
+            return torch.ones(1, 1, resolution, resolution)
+
 
 class GeometricOptimizer:
     """

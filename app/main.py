@@ -393,11 +393,19 @@ async def predict(request: PredictRequest):
         bc[0, 2, :, :] = request.mach / 0.6
         
         # Generate Geometry SDF (Using potentially optimized params)
-        sdf = GeometryFactory.generate_sdf(
-            request.geometry_type, 
-            current_geo_params, 
-            resolution
-        ).to(state.device)
+        # Generate Geometry SDF (Using potentially optimized params)
+        if request.geometry_type == "custom":
+            # CUSTOM UPLOAD SUPPORT
+            sdf_base64 = current_geo_params.get("sdf_base64")
+            if not sdf_base64:
+                raise HTTPException(status_code=422, detail="Missing sdf_base64 for custom geometry")
+            sdf = GeometryFactory.decode_sdf(sdf_base64, resolution).to(state.device)
+        else:
+            sdf = GeometryFactory.generate_sdf(
+                request.geometry_type, 
+                current_geo_params, 
+                resolution
+            ).to(state.device)
         bc[0, 3, :, :] = sdf[0, 0]
         
         # Move to device
