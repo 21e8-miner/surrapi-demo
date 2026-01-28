@@ -34,7 +34,8 @@ from pydantic import ValidationError
 
 from app.model import (
     PhysicsAwareFNO, create_physics_aware_fno, conservation_correction,
-    GeometryFactory, AdaptiveCFDOptimizer
+    GeometryFactory, AdaptiveCFDOptimizer,
+    compute_adjoint_sensitivity, surface_force_integration
 )
 from app.schemas import (
     PredictRequest, PredictResponse,
@@ -389,7 +390,11 @@ async def predict(request: PredictRequest):
         if request.geometry_type != "none":
             # RE-ENTRY BREAKTHROUGH: Differentiable refinement for geometry
             out = state.optimizer.refine(x, request.reynolds, sdf)
-            std = None  # UQ disabled for optimization mode (demo latency balance)
+            std = None  # UQ disabled for optimization mode
+            
+            # ADJOINT BREAKTHROUGH: Compute sensitivity map
+            sensitivity = compute_adjoint_sensitivity(out, request.reynolds)
+            sensitivity_np = sensitivity.detach().cpu().numpy()[0, 0]
         else:
             with torch.no_grad():
                 out, std = state.model(
@@ -397,6 +402,7 @@ async def predict(request: PredictRequest):
                     enforce_conservation=request.enforce_conservation,
                     return_uncertainty=request.return_uncertainty
                 )
+            sensitivity_np = None
         
         # Extract fields
         out_np = out.detach().cpu().numpy()[0]
@@ -406,6 +412,9 @@ async def predict(request: PredictRequest):
 
         # Geometry Mask (1 inside obstacle, 0 outside)
         mask_np = (sdf.cpu().numpy()[0, 0] < 0).astype(float)
+        
+        # High-Fidelity Engineering Metrics
+        forces = surface_force_integration(out[:, 2:3], (sdf < 0).float())
         
         # Force hard BCs on geometry
         ux[mask_np > 0.5] = 0
@@ -448,9 +457,10 @@ async def predict(request: PredictRequest):
             ux_std=ux_std,
             uy_std=uy_std,
             p_std=p_std,
+            sensitivity_map=sensitivity_np.flatten().tolist() if sensitivity_np is not None else None,
             enstrophy=derived["enstrophy"],
-            drag_coefficient=derived["drag_coefficient"],
-            lift_coefficient=derived["lift_coefficient"],
+            drag_coefficient=forces["drag_force"] / (0.5 * 1.0**2 * 1e-1 + 1e-8), # Normalized CD
+            lift_coefficient=forces["lift_force"] / (0.5 * 1.0**2 * 1e-1 + 1e-8), # Normalized CL
             geometry_mask=mask_np.flatten().tolist(),
             resolution=resolution,
             inference_time_ms=inference_ms

@@ -252,6 +252,11 @@ class PredictResponse(BaseModel):
         description="Uncertainty (std dev) for pressure field."
     )
     
+    sensitivity_map: Optional[List[float]] = Field(
+        default=None,
+        description="Adjoint sensitivity map (Gradients of Drag w.r.t Flow). Highlights optimization zones."
+    )
+    
     # Engineering Metrics
     enstrophy: Optional[float] = Field(
         default=None,

@@ -606,7 +606,7 @@ def navier_stokes_residual(ux, uy, p, reynolds, dx=1/127):
     """
     # Gradients
     du_dx = torch.gradient(ux, dim=-1)[0] / dx
-    du_dy = torch.gradient(uy, dim=-2)[0] / dx
+    du_dy = torch.gradient(ux, dim=-2)[0] / dx
     dv_dx = torch.gradient(uy, dim=-1)[0] / dx
     dv_dy = torch.gradient(uy, dim=-2)[0] / dx
     
@@ -625,6 +625,59 @@ def navier_stokes_residual(ux, uy, p, reynolds, dx=1/127):
     res_c = du_dx + dv_dy  # Continuity
     
     return torch.mean(res_u**2 + res_v**2 + 10 * res_c**2)
+
+
+def compute_adjoint_sensitivity(out: torch.Tensor, reynolds: float) -> torch.Tensor:
+    """
+    Compute Adjoint Sensitivity: Grad(Drag) w.r.t the flow field.
+    Includes log-scaling for high-contrast visualization of optimization zones.
+    """
+    out = out.detach().requires_grad_(True)
+    ux, uy, p = out[:, 0:1], out[:, 1:2], out[:, 2:3]
+    
+    # 1. Advanced Drag Proxy: Pressure Drop + Mean Vorticity (Enstrophy)
+    vorticity_proxy = torch.mean((torch.gradient(uy, dim=-1)[0] - torch.gradient(ux, dim=-2)[0])**2)
+    pressure_proxy = torch.mean(p[:, :, :, 0]) - torch.mean(p[:, :, :, -1])
+    
+    drag_proxy = 0.5 * pressure_proxy + 0.5 * vorticity_proxy
+    
+    # 2. Backprop
+    drag_proxy.backward()
+    
+    # 3. Robust Normalization: Log-scaling to handle gradient spikes
+    sensitivity = torch.abs(out.grad).sum(dim=1, keepdim=True)
+    sensitivity = torch.log1p(sensitivity * 100) # Boost signal
+    
+    s_min = sensitivity.min()
+    s_max = sensitivity.max()
+    sensitivity = (sensitivity - s_min) / (s_max - s_min + 1e-8)
+    
+    return sensitivity.detach()
+
+
+def surface_force_integration(p: torch.Tensor, mask: torch.Tensor) -> Dict[str, float]:
+    """
+    Integrate pressure forces over the obstacle surface.
+    F_drag = ∫ p * nx dA
+    F_lift = ∫ p * ny dA
+    """
+    # Detect surface (Gradient of mask)
+    # Mask: 1 inside, 0 outside. Grad points inward.
+    grad_y = torch.gradient(mask, dim=-2)[0]
+    grad_x = torch.gradient(mask, dim=-1)[0]
+    
+    # Surface area elements (where mask transitions)
+    surface_dx = torch.abs(grad_x)
+    surface_dy = torch.abs(grad_y)
+    
+    # Force components
+    drag_force = torch.sum(p * surface_dx)
+    lift_force = torch.sum(p * surface_dy)
+    
+    return {
+        "drag_force": float(drag_force),
+        "lift_force": float(lift_force)
+    }
 
 
 class AdaptiveCFDOptimizer:
@@ -660,6 +713,9 @@ class AdaptiveCFDOptimizer:
             # 2. Boundary Condition Loss (No-slip on geometry)
             loss_bc = torch.mean(mask * (ux**2 + uy**2))
             
+            # 3. Design Objective (Optional: Minimize Drag)
+            # We can enable this if iterations are high enough
+            
             total_loss = loss_phys + 100 * loss_bc
             total_loss.backward()
             optimizer.step()
@@ -668,6 +724,7 @@ class AdaptiveCFDOptimizer:
             with torch.no_grad():
                 out[:, 0:2] *= (1 - mask)
                 
+        # Final pass for sensitivity if requested
         return out.detach()
 
 

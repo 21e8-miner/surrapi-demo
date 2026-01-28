@@ -1030,6 +1030,9 @@
                         id="btn-velocity_magnitude">Speed</button>
                     <button class="field-btn" onclick="showField('ux_std')" id="btn-ux_std"
                         style="display: none;">Uncertainty</button>
+                    <button class="field-btn" onclick="showField('sensitivity_map')" id="btn-sensitivity_map"
+                        style="display: none; background: rgba(255, 107, 0, 0.2); border-color: #ff6b00;">Pro:
+                        Adjoint</button>
                 </div>
             </div>
         </div>
@@ -1404,6 +1407,15 @@ result.<span class="function">save_vtk</span>(<span class="string">"flow_field.v
                     if (currentField === 'ux_std') currentField = 'ux';
                 }
 
+                // Show sensitivity button if data available
+                const sensBtn = document.getElementById('btn-sensitivity_map');
+                if (currentData.sensitivity_map) {
+                    sensBtn.style.display = 'inline-block';
+                } else {
+                    sensBtn.style.display = 'none';
+                    if (currentField === 'sensitivity_map') currentField = 'ux';
+                }
+
                 showField(currentField);
 
             } catch (error) {
@@ -1466,6 +1478,9 @@ result.<span class="function">save_vtk</span>(<span class="string">"flow_field.v
             } else if (field === 'ux_std') {
                 colorscale = 'Hot';
                 title = 'Prediction Uncertainty (σ)';
+            } else if (field === 'sensitivity_map') {
+                colorscale = 'YlOrRd';
+                title = 'Adjoint Sensitivity [∂D/∂u] (Optimization Zone)';
             }
 
             let update = {
