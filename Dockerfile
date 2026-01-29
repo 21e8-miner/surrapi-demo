@@ -1,71 +1,43 @@
-# =============================================================================
-# SurrAPI - Surrogate-as-a-Service
-# Multi-stage build for production deployment
-# =============================================================================
+# Simplified Dockerfile for Railway
+FROM python:3.11-slim
 
-# Stage 1: Build environment
-FROM python:3.11-slim as builder
-
-WORKDIR /build
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create virtual environment
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-# =============================================================================
-# Stage 2: Production image
-# =============================================================================
-FROM python:3.11-slim as production
-
-# Labels
-LABEL maintainer="SurrAPI <team@surrapi.io>"
-LABEL description="CFD Surrogate-as-a-Service API"
-LABEL version="0.1.0"
-
-# Set environment variables
+# Set environment
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     SURRAPI_PORT=8000 \
-    SURRAPI_DEVICE=auto \
+    SURRAPI_DEVICE=cpu \
     SURRAPI_LOG_LEVEL=INFO
 
-WORKDIR /surrapi
+WORKDIR /app
 
-# Copy virtual environment from builder
-COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Install runtime dependencies (for potential VTK rendering)
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy application code
+# Install Python dependencies - use CPU-only torch to reduce size
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy application
 COPY app/ ./app/
+COPY scripts/ ./scripts/
 
-# Create non-root user for security
-RUN useradd --create-home --shell /bin/bash surrapi && \
-    chown -R surrapi:surrapi /surrapi
+# Generate demo weights
+RUN python scripts/generate_demo_weights.py
 
-USER surrapi
+# Create non-root user
+RUN useradd --create-home appuser && chown -R appuser /app
+USER appuser
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
 # Expose port
 EXPOSE 8000
 
-# Run with uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start server - use PORT env var provided by Railway
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
