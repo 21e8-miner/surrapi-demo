@@ -286,6 +286,11 @@ class PredictResponse(BaseModel):
         default=None,
         description="Boolean mask of the obstacle geometry (1=solid, 0=fluid)."
     )
+
+    optimized_params: Optional[Dict[str, float]] = Field(
+        default=None,
+        description="Updated geometry parameters after Inverse Design optimization."
+    )
     
     # Metadata
     resolution: int = Field(

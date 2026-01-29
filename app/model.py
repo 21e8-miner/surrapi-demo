@@ -12,11 +12,17 @@ Trained on synthetic OpenFOAM simulation data.
 """
 
 import os
+import logging
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from typing import Tuple, Optional, Any, Dict
+
+# Detect device
+DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+
+logger = logging.getLogger("surrapi.model")
 
 
 class SpectralConv2d(nn.Module):
@@ -569,12 +575,14 @@ class GeometryFactory:
     """Generates Signed Distance Functions (SDF) for arbitrary obstacles"""
     
     @staticmethod
-    def generate_sdf(shape_type: str, params: dict, resolution: int = 128) -> torch.Tensor:
-        x = torch.linspace(0, 1, resolution)
-        y = torch.linspace(0, 1, resolution)
+    def generate_sdf(shape_type: str, params: dict, resolution: int = 128, device: str = "cpu") -> torch.Tensor:
+        x = torch.linspace(0, 1, resolution, device=device)
+        y = torch.linspace(0, 1, resolution, device=device)
         grid_y, grid_x = torch.meshgrid(y, x, indexing='ij')
         
-        cx, cy = params.get("x", 0.5), params.get("y", 0.5)
+        # Ensure cx, cy are on the correct device if they are tensors
+        cx = params.get("x", 0.5)
+        cy = params.get("y", 0.5)
         
         if shape_type == "cylinder":
             r = params.get("radius", 0.1)
@@ -585,8 +593,9 @@ class GeometryFactory:
         elif shape_type == "airfoil":
             # NACA 0012 approximation
             t = 0.12
-            xx = (grid_x - cx) / params.get("scale", 0.2)
-            yy = (grid_y - cy) / params.get("scale", 0.2)
+            scale = params.get("scale", 0.2)
+            xx = (grid_x - cx) / scale
+            yy = (grid_y - cy) / scale
             # Mask for airfoil shape
             yt = 5 * t * (0.2969 * torch.sqrt(xx.clamp(min=0)) - 0.1260 * xx - 
                          0.3516 * xx**2 + 0.2843 * xx**3 - 0.1015 * xx**4)
@@ -684,7 +693,7 @@ class GeometricOptimizer:
             
             # GeometryFactory needs to handle tensor inputs mixed with floats
             # We assume GenerateSDF uses torch ops which handle broadcasting
-            sdf = GeometryFactory.generate_sdf(geometry_type, current_params, resolution).to(DEVICE)
+            sdf = GeometryFactory.generate_sdf(geometry_type, current_params, resolution, device=DEVICE)
             
             # 2. Predict Flow
             # We use the base model for speed in the optimization loop
@@ -708,10 +717,15 @@ class GeometricOptimizer:
             
             forces = surface_force_integration(p, mask_soft)
             drag = forces["drag_force"]
+            # logger.info(f"DEBUG: Optimization iter {i}, drag={drag.item()}")
             
             # 4. Optimization Step
             loss = drag + 0.1 * torch.mean(mask_soft) # Regularization: don't disappear
             loss.backward()
+            
+            # QC: Gradient Clipping to prevent NaNs from sharp Sigmoid
+            torch.nn.utils.clip_grad_norm_([p for p in learnable_params.values() if isinstance(p, torch.Tensor)], 1.0)
+            
             optimizer.step()
             
             # Clipping to domain
@@ -760,7 +774,7 @@ def navier_stokes_residual(ux, uy, p, reynolds):
     S_xx = du_dx
     S_yy = dv_dy
     S_xy = 0.5 * (du_dy + dv_dx)
-    strain_mag = torch.sqrt(2 * (S_xx**2 + S_yy**2 + 2 * S_xy**2))
+    strain_mag = torch.sqrt(2 * (S_xx**2 + S_yy**2 + 2 * S_xy**2) + 1e-8)
     
     # 2. Eddy Viscosity
     # Cs (Smagorinsky constant) approx 0.1 - 0.2
@@ -840,8 +854,8 @@ def surface_force_integration(p: torch.Tensor, mask: torch.Tensor) -> Dict[str, 
     lift_force = torch.sum(p * surface_dy)
     
     return {
-        "drag_force": float(drag_force),
-        "lift_force": float(lift_force)
+        "drag_force": drag_force,
+        "lift_force": lift_force
     }
 
 
@@ -896,6 +910,10 @@ class AdaptiveCFDOptimizer:
             
             total_loss = loss_phys + 100 * loss_bc
             total_loss.backward()
+            
+            # QC: Gradient Clipping for stability in PINC refinement
+            torch.nn.utils.clip_grad_norm_([out], 1.0)
+            
             optimizer.step()
             
             # Hard enforce zero in solids

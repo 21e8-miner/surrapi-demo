@@ -101,6 +101,22 @@ state = AppState()
 # VTK Builder (lightweight, no vtk dependency in production)
 # =============================================================================
 
+def sanitize_list(l):
+    if l is None: return None
+    import math
+    res = []
+    for i, v in enumerate(l):
+        try:
+            fv = float(v)
+            if math.isfinite(fv):
+                res.append(fv)
+            else:
+                res.append(0.0)
+        except Exception as e:
+            logger.error(f"Sanitize failed at index {i}, value={v}, type={type(v)}: {e}")
+            res.append(0.0)
+    return res
+
 def build_vti_base64(ux: np.ndarray, uy: np.ndarray, p: np.ndarray, resolution: int) -> str:
     """
     Build a minimal VTK ImageData (.vti) XML file and return base64-encoded.
@@ -406,8 +422,9 @@ async def predict(request: PredictRequest):
             sdf = GeometryFactory.generate_sdf(
                 request.geometry_type, 
                 current_geo_params, 
-                resolution
-            ).to(state.device)
+                resolution,
+                device=state.device
+            )
         bc[0, 3, :, :] = sdf[0, 0]
         
         # Move to device
@@ -429,6 +446,7 @@ async def predict(request: PredictRequest):
             
             # ADJOINT BREAKTHROUGH: Compute sensitivity map
             sensitivity = compute_adjoint_sensitivity(out, request.reynolds)
+            sensitivity = torch.nan_to_num(sensitivity, nan=0.0)
             sensitivity_np = sensitivity.detach().cpu().numpy()[0, 0]
             
             # TRUST BREAKTHROUGH: Correlate Sensitivity with Uncertainty
@@ -444,7 +462,8 @@ async def predict(request: PredictRequest):
                     return_uncertainty=request.return_uncertainty
                 )
         
-        # Extract fields
+        # Extract fields and sanitize NaNs
+        out = torch.nan_to_num(out, nan=0.0, posinf=1.0, neginf=-1.0)
         out_np = out.detach().cpu().numpy()[0]
         ux = out_np[0]
         uy = out_np[1]
@@ -463,6 +482,7 @@ async def predict(request: PredictRequest):
         # Handle uncertainty std devs if requested
         ux_std, uy_std, p_std = None, None, None
         if std is not None:
+            std = torch.nan_to_num(std, nan=0.0)
             std_np = std.detach().cpu().numpy()[0]
             ux_std = std_np[0].flatten().tolist()
             uy_std = std_np[1].flatten().tolist()
@@ -485,32 +505,36 @@ async def predict(request: PredictRequest):
         logger.info(f"Design Prediction #{state.total_predictions}: Ge={request.geometry_type}, "
                    f"Re={request.reynolds:.0f} → {inference_ms:.1f}ms")
         
-        return PredictResponse(
-            vtk=vti,
-            ux=ux.flatten().tolist(),
-            uy=uy.flatten().tolist(),
-            p=p.flatten().tolist(),
-            velocity_magnitude=derived["velocity_magnitude"],
-            vorticity=derived["vorticity"],
-            divergence=derived["divergence"],
-            physics_score=derived["physics_score"],
-            ux_std=ux_std,
-            uy_std=uy_std,
-            p_std=p_std,
-            sensitivity_map=sensitivity_np.flatten().tolist() if sensitivity_np is not None else None,
-            trust_index=trust_index,
-            enstrophy=derived["enstrophy"],
-            # If optimized, return the new params in a header or log? 
-            # Ideally we update the response schema to return optimized params, but for now we rely on the visual update
-            # or we could stick it in geometry_params if the schema allowed outputting it?
-            # Schema response doesn't have geometry_params field. 
-            # We will rely on the improved drag coefficient to tell the story.
-            drag_coefficient=forces["drag_force"] / (0.5 * 1.0**2 * 1e-1 + 1e-8), # Normalized CD
-            lift_coefficient=forces["lift_force"] / (0.5 * 1.0**2 * 1e-1 + 1e-8), # Normalized CL
-            geometry_mask=mask_np.flatten().tolist(),
-            resolution=resolution,
-            inference_time_ms=inference_ms
-        )
+        try:
+            return PredictResponse(
+                vtk=vti,
+                ux=sanitize_list(ux.flatten()),
+                uy=sanitize_list(uy.flatten()),
+                p=sanitize_list(p.flatten()),
+                velocity_magnitude=sanitize_list(derived["velocity_magnitude"]),
+                vorticity=sanitize_list(derived["vorticity"]),
+                divergence=sanitize_list(derived["divergence"]),
+                physics_score=float(np.nan_to_num(derived["physics_score"])),
+                ux_std=sanitize_list(ux_std),
+                uy_std=sanitize_list(uy_std),
+                p_std=sanitize_list(p_std),
+                sensitivity_map=sanitize_list(sensitivity_np.flatten()) if sensitivity_np is not None else None,
+                trust_index=float(np.nan_to_num(trust_index)) if trust_index is not None else None,
+                enstrophy=float(np.nan_to_num(derived["enstrophy"])),
+                drag_coefficient=float(np.nan_to_num(forces["drag_force"].item())) / (0.5 * 1.0**2 * 1e-1 + 1e-8), 
+                lift_coefficient=float(np.nan_to_num(forces["lift_force"].item())) / (0.5 * 1.0**2 * 1e-1 + 1e-8), 
+                geometry_mask=sanitize_list(mask_np.flatten()),
+                optimized_params={k: float(np.nan_to_num(v)) for k, v in current_geo_params.items()} if request.optimize_geometry and current_geo_params else None,
+                resolution=resolution,
+                inference_time_ms=inference_ms
+            )
+        except Exception as json_err:
+            logger.error(f"Response serialization failed: {json_err}")
+            # Identify which field has NaN
+            for k, v in {"ux": ux, "uy": uy, "p": p}.items():
+                if np.isnan(v).any():
+                     logger.error(f"Field {k} contains NaNs even after np.nan_to_num!")
+            raise json_err
         
     except Exception as e:
         logger.error(f"Prediction failed: {e}")
